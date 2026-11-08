@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Type Out – SSC typing practice</title>
+  <meta name="description" content="Free, accessible typing practice for SSC skill tests: CHSL English and Hindi typing, CGL DEST. Exam-style timer, full and half mistake evaluation, and progress tracking.">
+  <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121218" media="(prefers-color-scheme: dark)">
+  <meta property="og:title" content="Type Out – SSC typing practice">
+  <meta property="og:description" content="Practise SSC CHSL and CGL DEST typing tests with exam-style timing and evaluation.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <script>
+    // Apply saved display settings before first paint so the page never flashes the wrong theme.
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('typeout:settings:v1') || '{}');
+        var r = document.documentElement;
+        if (s.theme && s.theme !== 'system') r.dataset.theme = s.theme;
+        if (s.reduceMotion) r.dataset.reduceMotion = 'true';
+      } catch (e) {}
+    })();
+  </script>
+  <script type="module" src="assets/js/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#/practice" aria-label="Type Out, home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <rect x="2" y="4" width="28" height="24" rx="6" class="brand-key"/>
+          <path d="M9 11h10M14 11v11" class="brand-t"/>
+          <path d="M23 13v9" class="brand-caret"/>
+        </svg>
+        <span class="brand-name">Type&nbsp;Out</span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="#/practice" data-nav="practice">Practice</a></li>
+          <li><a href="#/progress" data-nav="progress">Progress</a></li>
+          <li><a href="#/settings" data-nav="settings">Settings</a></li>
+          <li><a href="#/guide" data-nav="guide">Guide</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <noscript>
+      <div class="container"><p class="notice">Type Out needs JavaScript to run the typing test. Please enable JavaScript in your browser.</p></div>
+    </noscript>
+
+    <!-- ============ Practice set-up ============ -->
+    <section class="view container" data-view="practice" aria-labelledby="practice-heading" hidden>
+      <div class="page-head">
+        <h1 id="practice-heading" tabindex="-1">Set up a typing test</h1>
+        <p class="lede">Practise for SSC skill tests with an exam-style timer and SSC-style marking of full and half mistakes.</p>
+      </div>
+
+      <form id="setup-form" class="setup" novalidate>
+        <div class="setup-main">
+          <fieldset class="card">
+            <legend class="card-title">Exam pattern</legend>
+            <div class="preset-grid" id="preset-options"></div>
+
+            <div class="custom-fields" id="custom-fields" hidden>
+              <fieldset class="inline-group" id="lang-field">
+                <legend>Language</legend>
+                <label class="choice"><input type="radio" name="lang" value="en"> English</label>
+                <label class="choice"><input type="radio" name="lang" value="hi"> Hindi</label>
+              </fieldset>
+              <div class="field-row" id="custom-numbers">
+                <div class="field">
+                  <label for="custom-minutes">Duration in minutes</label>
+                  <input id="custom-minutes" name="customMinutes" type="number" inputmode="numeric" min="1" max="60" step="1">
+                </div>
+                <div class="field">
+                  <label for="custom-wpm">Target speed in words per minute</label>
+                  <input id="custom-wpm" name="customWpm" type="number" inputmode="numeric" min="5" max="150" step="1">
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="card">
+            <legend class="card-title">Mode</legend>
+            <div class="mode-grid">
+              <label class="option-card">
+                <input type="radio" name="mode" value="exam" aria-describedby="mode-exam-desc">
+                <span class="option-body">
+                  <span class="option-name">Exam simulation</span>
+                  <span class="option-desc" id="mode-exam-desc">No highlighting and no pause, as in the SSC test software.</span>
+                </span>
+              </label>
+              <label class="option-card">
+                <input type="radio" name="mode" value="practice" aria-describedby="mode-practice-desc">
+                <span class="option-body">
+                  <span class="option-name">Practice</span>
+                  <span class="option-desc" id="mode-practice-desc">The current word is highlighted, mistakes are marked as you type, and you can pause.</span>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="card">
+            <h2 class="card-title">Passage</h2>
+            <div class="field">
+              <label for="passage-select">Passage to type</label>
+              <select id="passage-select" name="passageId"></select>
+            </div>
+            <div class="field" id="own-passage-field" hidden>
+              <label for="own-passage">Your passage</label>
+              <textarea id="own-passage" name="ownPassage" rows="6" aria-describedby="own-passage-hint"></textarea>
+              <p class="hint" id="own-passage-hint">Paste or type any text. It stays in this browser. <span id="own-passage-count"></span></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="setup-side">
+          <fieldset class="card">
+            <legend class="card-title">Rules</legend>
+            <label class="check"><input type="checkbox" name="backspace"> Allow backspace</label>
+            <label class="check"><input type="checkbox" name="startOnType" aria-describedby="start-on-type-hint"> Start the timer on my first key press</label>
+            <p class="hint" id="start-on-type-hint">Otherwise the timer starts as soon as the test opens.</p>
+            <label class="check"><input type="checkbox" name="compensatoryTime" aria-describedby="comp-hint"> Add compensatory time</label>
+            <p class="hint" id="comp-hint">20 minutes per hour for eligible PwBD candidates. The target stays the same.</p>
+            <div class="field">
+              <label for="error-limit">Permissible errors</label>
+              <select id="error-limit" name="errorLimitId" aria-describedby="error-limit-hint"></select>
+            </div>
+            <div class="field" id="custom-error-field" hidden>
+              <label for="custom-error">Error limit in percent</label>
+              <input id="custom-error" name="customErrorPercent" type="number" inputmode="decimal" min="0" max="100" step="0.5">
+            </div>
+            <p class="hint" id="error-limit-hint">Limits differ between exams and years. Check the notice for your exam.</p>
+          </fieldset>
+
+          <div class="card summary-card">
+            <h2 class="card-title">Summary</h2>
+            <dl class="summary-list" id="setup-summary"></dl>
+            <button type="submit" class="btn btn-primary btn-block">Start test</button>
+            <p class="error-text" id="setup-error" role="alert"></p>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============ Test ============ -->
+    <section class="view container test-view" data-view="test" aria-labelledby="test-heading" hidden>
+      <div class="test-bar">
+        <div class="test-title">
+          <h1 id="test-heading" tabindex="-1">Typing test</h1>
+          <p class="test-meta" id="test-meta"></p>
+        </div>
+        <div class="test-clock">
+          <span class="clock-label" id="timer-label">Time left</span>
+          <span class="timer" id="timer" role="timer" aria-labelledby="timer-label">00:00</span>
+        </div>
+        <dl class="live-stats" id="live-stats">
+          <div><dt>Speed</dt><dd><span id="live-wpm">0</span> <abbr title="words per minute">WPM</abbr></dd></div>
+          <div><dt>Key depressions</dt><dd><span id="live-keys">0</span><span class="of" id="live-target"></span></dd></div>
+        </dl>
+        <div class="test-actions">
+          <button type="button" class="btn" id="pause-btn" hidden>Pause</button>
+          <button type="button" class="btn btn-primary" id="submit-btn">Submit</button>
+        </div>
+      </div>
+
+      <p class="test-status" id="test-status"></p>
+
+      <div class="passage" id="passage" tabindex="0" role="region" aria-label="Passage to type"></div>
+
+      <div class="typing-wrap">
+        <label for="typing-input" class="typing-label">Type the passage here</label>
+        <textarea id="typing-input" class="typing-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" data-gramm="false" aria-describedby="typing-help"></textarea>
+        <p class="hint" id="typing-help">Pasting is turned off. Reading aids: Alt+Shift+N reads the next words, Alt+Shift+W the current word, Alt+Shift+S spells it, Alt+Shift+T tells the time left and Alt+Shift+P your progress.</p>
+      </div>
+
+      <details class="reading-aids">
+        <summary>Reading aids</summary>
+        <div class="aid-buttons">
+          <button type="button" class="btn btn-small" data-aid="next">Read next words <kbd>Alt+Shift+N</kbd></button>
+          <button type="button" class="btn btn-small" data-aid="word">Current word <kbd>Alt+Shift+W</kbd></button>
+          <button type="button" class="btn btn-small" data-aid="spell">Spell current word <kbd>Alt+Shift+S</kbd></button>
+          <button type="button" class="btn btn-small" data-aid="time">Time left <kbd>Alt+Shift+T</kbd></button>
+          <button type="button" class="btn btn-small" data-aid="progress">Progress <kbd>Alt+Shift+P</kbd></button>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ Results ============ -->
+    <section class="view container" data-view="results" aria-labelledby="results-heading" hidden>
+      <div class="page-head">
+        <h1 id="results-heading" tabindex="-1">Your result</h1>
+        <p class="lede" id="results-meta"></p>
+      </div>
+
+      <div class="verdict" id="verdict"></div>
+
+      <div class="stat-grid" id="result-tiles"></div>
+
+      <div class="results-columns">
+        <div class="card">
+          <h2 class="card-title">Details</h2>
+          <table class="data-table kv-table" id="result-details"></table>
+        </div>
+        <div class="card">
+          <h2 class="card-title">Mistakes by type</h2>
+          <table class="data-table" id="mistake-summary"></table>
+          <p class="hint">Errors = full mistakes + half of the half mistakes. Error percentage is errors divided by the passage words you attempted.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title" id="mistake-list-heading">Mistake list</h2>
+        <div class="table-scroll" tabindex="0" role="region" aria-labelledby="mistake-list-heading">
+          <table class="data-table" id="mistake-list"></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Your text compared with the passage</h2>
+        <ul class="legend" aria-label="Legend">
+          <li><span class="mk mk-full"><s>wrnog</s> <span class="exp">wrong</span></span> Wrong word (full)</li>
+          <li><span class="mk mk-omit">missed</span> Missed word (full)</li>
+          <li><span class="mk mk-add">extra</span> Extra word (full)</li>
+          <li><span class="mk mk-half"><s>Half</s> <span class="exp">half,</span></span> Spacing, capitals, punctuation or word order (half)</li>
+        </ul>
+        <div class="annotated" id="annotated"></div>
+      </div>
+
+      <div class="actions-row">
+        <button type="button" class="btn btn-primary" id="retry-btn">Try this passage again</button>
+        <button type="button" class="btn" id="new-passage-btn">New passage, same settings</button>
+        <a class="btn" href="#/practice">Change settings</a>
+        <a class="btn" href="#/progress">See progress</a>
+      </div>
+    </section>
+
+    <!-- ============ Progress ============ -->
+    <section class="view container" data-view="progress" aria-labelledby="progress-heading" hidden>
+      <div class="page-head">
+        <h1 id="progress-heading" tabindex="-1">Progress</h1>
+        <p class="lede">Your results are saved only in this browser.</p>
+      </div>
+      <div id="progress-empty" class="card empty" hidden>
+        <p>You have not finished a test yet. Your speed and accuracy will appear here after your first attempt.</p>
+        <a class="btn btn-primary" href="#/practice">Start a test</a>
+      </div>
+      <div id="progress-content">
+        <div class="filter-row">
+          <div class="field">
+            <label for="progress-filter">Exam pattern</label>
+            <select id="progress-filter"></select>
+          </div>
+        </div>
+        <div class="stat-grid" id="progress-tiles"></div>
+        <figure class="card chart-card">
+          <figcaption class="card-title" id="chart-title">Net speed, last 30 tests</figcaption>
+          <div class="chart" id="progress-chart"></div>
+          <p class="hint">The same figures are in the table below.</p>
+        </figure>
+        <div class="card">
+          <h2 class="card-title" id="history-heading">All attempts</h2>
+          <div class="table-scroll" tabindex="0" role="region" aria-labelledby="history-heading">
+            <table class="data-table" id="history-table"></table>
+          </div>
+          <div class="actions-row">
+            <button type="button" class="btn" id="export-btn">Download as CSV</button>
+            <button type="button" class="btn btn-danger" id="clear-btn">Delete all results</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Settings ============ -->
+    <section class="view container" data-view="settings" aria-labelledby="settings-heading" hidden>
+      <div class="page-head">
+        <h1 id="settings-heading" tabindex="-1">Settings</h1>
+        <p class="lede">Changes apply straight away and are remembered in this browser.</p>
+      </div>
+      <form id="settings-form" class="settings" novalidate>
+        <fieldset class="card">
+          <legend class="card-title">Colour theme</legend>
+          <div class="inline-group">
+            <label class="choice"><input type="radio" name="theme" value="system"> Match my device</label>
+            <label class="choice"><input type="radio" name="theme" value="light"> Light</label>
+            <label class="choice"><input type="radio" name="theme" value="dark"> Dark</label>
+            <label class="choice"><input type="radio" name="theme" value="contrast"> High contrast</label>
+          </div>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend class="card-title">Passage text</legend>
+          <div class="field">
+            <label for="text-size">Text size <output id="text-size-out" for="text-size"></output></label>
+            <input id="text-size" name="textSize" type="range" min="16" max="40" step="2">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="line-height">Line spacing</label>
+              <select id="line-height" name="lineHeight">
+                <option value="normal">Normal</option>
+                <option value="relaxed">Relaxed</option>
+                <option value="spacious">Spacious</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="font">Typeface</label>
+              <select id="font" name="font">
+                <option value="sans">Sans serif</option>
+                <option value="serif">Serif</option>
+                <option value="mono">Monospace</option>
+                <option value="wide">Wide letters (Verdana)</option>
+              </select>
+            </div>
+          </div>
+          <div class="preview" aria-label="Preview">
+            <p lang="en">The quick brown fox jumps over the lazy dog, 1234567890.</p>
+            <p lang="hi">भारत एक विशाल और विविधताओं से भरा देश है।</p>
+          </div>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend class="card-title">During the test</legend>
+          <label class="check"><input type="checkbox" name="showLiveStats"> Show live speed and key count</label>
+          <label class="check"><input type="checkbox" name="announceTime" aria-describedby="announce-time-hint"> Announce time left to screen readers</label>
+          <p class="hint" id="announce-time-hint">Every minute, then at 30 and 10 seconds.</p>
+          <label class="check"><input type="checkbox" name="announceMistakes" aria-describedby="announce-mistakes-hint"> Announce mistakes as I type</label>
+          <p class="hint" id="announce-mistakes-hint">Practice mode only. Screen readers say the expected word after each wrong word.</p>
+          <label class="check"><input type="checkbox" name="reduceMotion"> Reduce motion</label>
+        </fieldset>
+
+        <div class="actions-row">
+          <button type="button" class="btn" id="reset-settings">Restore default settings</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============ Guide ============ -->
+    <section class="view container prose-view" data-view="guide" aria-labelledby="guide-heading" hidden>
+      <div class="page-head">
+        <h1 id="guide-heading" tabindex="-1">Guide</h1>
+        <p class="lede">How Type Out works, how your attempt is marked and how to set up Hindi typing.</p>
+      </div>
+
+      <nav class="card toc" aria-labelledby="toc-heading">
+        <h2 id="toc-heading" class="card-title">On this page</h2>
+        <ul>
+          <li><a href="#guide-patterns">Exam patterns</a></li>
+          <li><a href="#guide-marking">How marking works</a></li>
+          <li><a href="#guide-keys">Keyboard shortcuts</a></li>
+          <li><a href="#guide-hindi">Typing in Hindi</a></li>
+          <li><a href="#guide-a11y">Accessibility</a></li>
+        </ul>
+      </nav>
+
+      <div class="prose">
+        <h2 id="guide-patterns" tabindex="-1">Exam patterns</h2>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Exam patterns">
+          <table class="data-table">
+            <thead><tr><th scope="col">Pattern</th><th scope="col">Time</th><th scope="col">Standard</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">SSC CHSL – English</th><td>10 minutes</td><td>35 words per minute (1,750 key depressions)</td></tr>
+              <tr><th scope="row">SSC CHSL – Hindi</th><td>10 minutes</td><td>30 words per minute (1,500 key depressions)</td></tr>
+              <tr><th scope="row">SSC CGL – DEST</th><td>15 minutes</td><td>2,000 key depressions</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>One word is counted as five key depressions, including spaces. The numbers follow recent SSC notices, but rules change: always read the notice for your exam, and use the Custom pattern or the error-limit setting to match it.</p>
+        <p><strong>Exam simulation</strong> behaves like the SSC software: the passage is not highlighted and the test cannot be paused. <strong>Practice</strong> highlights the current word, marks wrong words as you go and lets you pause.</p>
+
+        <h2 id="guide-marking" tabindex="-1">How marking works</h2>
+        <p>When you finish, your text is lined up with the passage word by word. Each difference is a full or a half mistake.</p>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Mistake types">
+          <table class="data-table">
+            <thead><tr><th scope="col">Mistake</th><th scope="col">Example</th><th scope="col">Counts as</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Missed word</th><td>“the cat sat” typed as “the sat”</td><td>Full</td></tr>
+              <tr><th scope="row">Extra word</th><td>“the cat” typed as “the big cat”</td><td>Full</td></tr>
+              <tr><th scope="row">Wrong word or spelling</th><td>“record” typed as “recrod”</td><td>Full</td></tr>
+              <tr><th scope="row">Spacing</th><td>“in the” typed as “inthe”, or “note book” for “notebook”</td><td>Half</td></tr>
+              <tr><th scope="row">Capital letters</th><td>“India” typed as “india”</td><td>Half</td></tr>
+              <tr><th scope="row">Punctuation</th><td>“however,” typed as “however”</td><td>Half</td></tr>
+              <tr><th scope="row">Word order</th><td>“very good” typed as “good very”</td><td>Half</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li><strong>Errors</strong> = full mistakes + (half mistakes ÷ 2).</li>
+          <li><strong>Error percentage</strong> = errors ÷ passage words you attempted × 100. Text after the last word you typed is not counted against you.</li>
+          <li><strong>Gross speed</strong> = (key depressions ÷ 5) ÷ minutes.</li>
+          <li><strong>Net speed</strong> = (key depressions ÷ 5 − errors) ÷ minutes.</li>
+          <li><strong>KDPH</strong> = key depressions per hour.</li>
+          <li>A word cut off when the time runs out is not counted as a mistake.</li>
+          <li>You meet the standard when you reach the target key depressions in the time allowed and your error percentage is within the limit.</li>
+        </ul>
+
+        <h2 id="guide-keys" tabindex="-1">Keyboard shortcuts</h2>
+        <p>These work while you are in the typing box or the passage. Screen reader users can read the passage with the usual reading keys at any time.</p>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Keyboard shortcuts">
+          <table class="data-table">
+            <thead><tr><th scope="col">Keys</th><th scope="col">What it does</th></tr></thead>
+            <tbody>
+              <tr><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd></td><td>Read the next few words of the passage</td></tr>
+              <tr><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></td><td>Read the current word</td></tr>
+              <tr><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td><td>Spell the current word letter by letter</td></tr>
+              <tr><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></td><td>Say the time left</td></tr>
+              <tr><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></td><td>Say words typed and current speed</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="guide-hindi" tabindex="-1">Typing in Hindi</h2>
+        <p>Hindi passages are in Unicode, the same text you see in Mangal or Nirmala UI fonts. Type them with a Hindi keyboard on your device:</p>
+        <ul>
+          <li><strong>Windows:</strong> Settings → Time &amp; language → Language &amp; region → Add a language → Hindi. Add the <em>Hindi Traditional</em> keyboard (InScript). Switch with <kbd>Windows</kbd>+<kbd>Space</kbd>.</li>
+          <li><strong>Remington (GAIL):</strong> install a Remington GAIL Unicode keyboard, such as the free Indic input tools published for government use, and choose it from the language bar.</li>
+          <li><strong>macOS:</strong> System Settings → Keyboard → Input Sources → add Hindi – InScript.</li>
+          <li><strong>Android and iPhone:</strong> add Hindi to your on-screen keyboard. An external keyboard gives a far more realistic test.</li>
+        </ul>
+        <p>Practise on the layout you will choose in the exam.</p>
+
+        <h2 id="guide-a11y" tabindex="-1">Accessibility</h2>
+        <p>Type Out aims to meet WCAG 2.2 level AA. It works with the keyboard alone and with screen readers such as NVDA, JAWS, VoiceOver and TalkBack. You can change the theme, text size, spacing and typeface in Settings, and the reading aids let you hear the passage while you type.</p>
+        <p>If something does not work for you, please tell us so we can fix it.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>Type Out is an independent practice tool. It is not affiliated with the Staff Selection Commission.</p>
+      <p>Works offline once loaded. Your results never leave this device.</p>
+    </div>
+  </footer>
+
+  <div class="sr-only" id="announce-polite" aria-live="polite" aria-atomic="true"></div>
+  <div class="sr-only" id="announce-assertive" aria-live="assertive" aria-atomic="true"></div>
+
+  <dialog id="dialog" class="dialog" aria-labelledby="dialog-title" aria-describedby="dialog-body">
+    <h2 id="dialog-title"></h2>
+    <p id="dialog-body"></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="dialog-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="dialog-confirm">OK</button>
+    </div>
+  </dialog>
+</body>
+</html>

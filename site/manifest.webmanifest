@@ -1,0 +1,17 @@
+{
+  "name": "Type Out – SSC typing practice",
+  "short_name": "Type Out",
+  "description": "Accessible typing practice for SSC CHSL and CGL DEST skill tests.",
+  "start_url": "./#/practice",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f6f2",
+  "theme_color": "#3535a8",
+  "lang": "en-IN",
+  "icons": [
+    { "src": "assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
