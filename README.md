@@ -21,10 +21,10 @@ Live at **https://typeout.wondrellabs.com** once deployed.
 ## Project layout
 
 ```
-site/                 ← everything that gets deployed (static, no build step)
+site/                 ← the app (static, no framework); copied to dist/ by the build
   index.html
-  404.html            redirects unknown paths to the app
-  CNAME               custom domain: typeout.wondrellabs.com
+  404.html            shown for unknown paths
+  _headers            security headers for Cloudflare Pages
   manifest.webmanifest, sw.js
   assets/css/styles.css
   assets/js/app.js       UI, routing, test engine
@@ -32,13 +32,15 @@ site/                 ← everything that gets deployed (static, no build step)
   assets/js/passages.js  passage bank
   assets/js/presets.js   exam patterns and error limits
   assets/js/storage.js   localStorage wrapper
+  assets/js/theme-init.js applies the saved theme before first paint
+scripts/build.mjs        builds dist/ for deployment
 tests/scoring.test.mjs   Node test suite for the scoring engine
-.github/workflows/deploy.yml
+.github/workflows/test.yml
 ```
 
 ## Run locally
 
-You need nothing beyond Node (for the tests) and any static file server.
+You need nothing beyond Node (for the tests and build) and any static file server.
 
 ```bash
 npm test
@@ -50,43 +52,31 @@ npm start
 
 Then open http://localhost:8080. `npm start` uses Python's built-in server. You can also run `npx serve site` or any other static server. The service worker is turned off on localhost, so your edits always show.
 
-## Deploy to GitHub Pages with the custom subdomain
+`npm run build` runs the tests and writes the deployable site to `dist/`, stamping the service worker cache with the commit.
 
-1. **Create a GitHub repository** (for example `typeout`) and push this folder to its `main` branch:
+## Deploy to Cloudflare Pages
 
-   ```bash
-   git init -b main
-   ```
+`wondrellabs.com` is on Cloudflare DNS, so the subdomain connects in one step.
 
-   ```bash
-   git add . && git commit -m "Type Out"
-   ```
+1. In the Cloudflare dashboard, open **Workers & Pages → Create → Pages → Connect to Git**, and choose the `Glowing-Radiant/typeout` repository.
+2. Use these build settings:
 
-   ```bash
-   git remote add origin https://github.com/<your-account>/typeout.git
-   ```
+   | Setting | Value |
+   |---|---|
+   | Production branch | `main` |
+   | Framework preset | None |
+   | Build command | `npm run build` |
+   | Build output directory | `dist` |
 
-   ```bash
-   git push -u origin main
-   ```
+   No environment variables are needed. If the build complains about the Node version, add `NODE_VERSION` = `22`.
+3. **Save and Deploy.** The first build runs the tests and publishes to `typeout.pages.dev` (or a similar `*.pages.dev` name).
+4. Open the project's **Custom domains** tab, select **Set up a custom domain**, enter `typeout.wondrellabs.com` and activate it. Cloudflare creates the DNS record and the certificate for you.
 
-2. **Turn on Pages**: in the repository, go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**. The workflow in `.github/workflows/deploy.yml` runs the tests and then deploys the `site/` folder on every push to `main`.
+Every push to `main` then redeploys automatically. Pull requests get their own preview URLs. Builds run on Cloudflare, so they do not use GitHub Actions minutes.
 
-3. **Add the DNS record** where `wondrellabs.com` is managed:
+`site/_headers` sets the security headers, including a strict Content Security Policy with no inline scripts or styles. Keep scripts and styles in files under `site/assets/`, or the policy will block them.
 
-   | Type  | Name / Host | Value / Target              |
-   |-------|-------------|-----------------------------|
-   | CNAME | `typeout`   | `<your-account>.github.io`  |
-
-   Use your GitHub user or organisation name, without the repository name. If you use Cloudflare, set the record to **DNS only** (grey cloud) until GitHub has issued the certificate.
-
-4. **Set the custom domain**: in **Settings → Pages → Custom domain**, enter `typeout.wondrellabs.com` and save. When the DNS check passes, tick **Enforce HTTPS**. The certificate can take a few minutes, and sometimes up to an hour.
-
-5. **Recommended: verify the domain** at **GitHub → your profile or organisation Settings → Pages → Add a domain** (`wondrellabs.com`). This stops anyone else from claiming your subdomains on GitHub Pages.
-
-With an Actions-based deploy, GitHub uses the custom domain saved in the repository settings, so step 4 is required. `site/CNAME` is kept so the domain is also recorded in the repository.
-
-To use another subdomain, change `site/CNAME`, the DNS record and the Pages setting.
+The GitHub Actions workflow (`.github/workflows/test.yml`) only runs the tests.
 
 ## How marking works
 

@@ -1,13 +1,15 @@
-// Offline support. The deploy workflow replaces __BUILD__ with the commit SHA, so every deploy gets a
+// Offline support. scripts/build.mjs replaces __BUILD__ with the commit SHA, so every deploy gets a
 // fresh cache and old ones are removed on activation.
+// The page is cached as './' (not './index.html'): hosts such as Cloudflare Pages redirect /index.html,
+// and a redirected response cannot be served for a navigation.
 const CACHE = 'typeout-__BUILD__';
 
 const ASSETS = [
   './',
-  './index.html',
   './manifest.webmanifest',
   './assets/css/styles.css',
   './assets/js/app.js',
+  './assets/js/theme-init.js',
   './assets/js/scoring.js',
   './assets/js/passages.js',
   './assets/js/presets.js',
@@ -39,10 +41,10 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('./index.html', copy));
+          if (res.ok && !res.redirected) caches.open(CACHE).then((c) => c.put('./', copy));
           return res;
         })
-        .catch(() => caches.match('./index.html')),
+        .catch(() => caches.match('./')),
     );
     return;
   }

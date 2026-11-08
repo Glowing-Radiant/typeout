@@ -14,17 +14,7 @@
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="assets/css/styles.css">
-  <script>
-    // Apply saved display settings before first paint so the page never flashes the wrong theme.
-    (function () {
-      try {
-        var s = JSON.parse(localStorage.getItem('typeout:settings:v1') || '{}');
-        var r = document.documentElement;
-        if (s.theme && s.theme !== 'system') r.dataset.theme = s.theme;
-        if (s.reduceMotion) r.dataset.reduceMotion = 'true';
-      } catch (e) {}
-    })();
-  </script>
+  <script src="assets/js/theme-init.js"></script>
   <script type="module" src="assets/js/app.js"></script>
 </head>
 <body>

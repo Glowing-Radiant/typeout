@@ -94,26 +94,40 @@ function confirmDialog({ title, body, confirm = 'OK', cancel = 'Cancel', danger 
   okBtn.textContent = confirm;
   cancelBtn.textContent = cancel;
   okBtn.className = `btn ${danger ? 'btn-danger' : 'btn-primary'}`;
-  dialog.returnValue = '';
+  dismissDialog?.(false);
 
+  // Resolve from the buttons and Escape directly rather than the dialog's 'close' event, which some
+  // embedded browsers only deliver once the page paints.
   return new Promise((resolve) => {
-    const choose = (value) => () => dialog.close(value);
-    okBtn.onclick = choose('confirm');
-    cancelBtn.onclick = choose('cancel');
-    dialog.addEventListener('close', () => {
-      okBtn.onclick = cancelBtn.onclick = null;
-      const ok = dialog.returnValue === 'confirm';
+    const finish = (ok) => {
+      okBtn.onclick = cancelBtn.onclick = dialog.onkeydown = dialog.oncancel = null;
+      dismissDialog = null;
+      if (dialog.open) dialog.close();
       if (!ok && opener && document.contains(opener)) opener.focus();
       resolve(ok);
-    }, { once: true });
+    };
+    dismissDialog = finish;
+    okBtn.onclick = () => finish(true);
+    cancelBtn.onclick = () => finish(false);
+    dialog.onkeydown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        finish(false);
+      }
+    };
+    dialog.oncancel = (e) => {
+      e.preventDefault();
+      finish(false);
+    };
     dialog.showModal();
     (focus === 'confirm' ? okBtn : cancelBtn).focus();
   });
 }
 
+let dismissDialog = null;
+
 function closeDialog() {
-  const dialog = $('#dialog');
-  if (dialog.open) dialog.close('cancel');
+  dismissDialog?.(false);
 }
 
 /* ------------------------------------------------------------------ settings */
