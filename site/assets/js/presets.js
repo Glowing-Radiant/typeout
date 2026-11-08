@@ -91,6 +91,20 @@ export function resolveConfig(s) {
     backspace: Boolean(s.backspace),
     startOnType: Boolean(s.startOnType),
     compensatoryTime: Boolean(s.compensatoryTime),
+    dictation: ['voice', 'screenreader'].includes(s.dictation)
+      ? {
+        output: s.dictation,
+        hide: Boolean(s.dictationHide),
+        punctuation: Boolean(s.dictationPunctuation),
+        unit: s.dictationUnit === 'words' ? 'words' : 'sentence',
+        size: Math.round(clamp(Number(s.dictationSize) || 8, 3, 30)),
+        lead: Math.round(clamp(Number(s.dictationLead) || 0, 0, 10)),
+        idleAction: ['repeat', 'next', 'off'].includes(s.idleAction) ? s.idleAction : 'repeat',
+        idleSeconds: clamp(Number(s.idleSeconds) || 6, 2, 60),
+        voiceURI: s.voiceURI || '',
+        rate: clamp(Number(s.speechRate) || 1, 0.5, 1.5),
+      }
+      : null,
   };
 }
 

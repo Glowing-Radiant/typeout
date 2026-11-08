@@ -2,6 +2,9 @@ import { evaluate, qualify, tokenize, countKeys, align } from './scoring.js';
 import { passagesFor, findPassage } from './passages.js';
 import { PRESETS, ERROR_LIMITS, LANG_LABEL, findPreset, resolveConfig } from './presets.js';
 import * as store from './storage.js';
+import {
+  createDictator, onVoicesChanged, previewVoice, screenReaderDuration, speechSupported, voicesFor, voicesLoaded,
+} from './dictation.js';
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -70,6 +73,12 @@ let lastResult = null; // the most recent finished test, shown on the results vi
 let lastPassageId = null;
 
 const MODE_LABEL = { exam: 'Exam simulation', practice: 'Practice' };
+const DICTATION_LABEL = { voice: 'Device voice', screenreader: 'Screen reader' };
+const DICTATION_HINTS = {
+  off: '',
+  voice: 'Your device’s voice reads each part. Nothing is sent to your screen reader.',
+  screenreader: 'Each part is sent to your screen reader, which reads it in its own voice and speed. The device voice stays silent. Turning off typed-character echo stops your screen reader talking over the dictation.',
+};
 
 /* ------------------------------------------------------------------ announcements */
 
@@ -238,6 +247,15 @@ function initSetupView() {
     form.elements.compensatoryTime.checked = setup.compensatoryTime;
     form.elements.errorLimitId.value = setup.errorLimitId;
     form.elements.customErrorPercent.value = setup.customErrorPercent;
+    form.elements.dictation.value = setup.dictation;
+    form.elements.dictationHide.checked = setup.dictationHide;
+    form.elements.dictationPunctuation.checked = setup.dictationPunctuation;
+    form.elements.dictationUnit.value = setup.dictationUnit;
+    form.elements.dictationSize.value = setup.dictationSize;
+    form.elements.dictationLead.value = setup.dictationLead;
+    form.elements.idleAction.value = setup.idleAction;
+    form.elements.idleSeconds.value = setup.idleSeconds;
+    form.elements.speechRate.value = setup.speechRate;
     refresh();
   };
 
@@ -256,6 +274,17 @@ function initSetupView() {
       compensatoryTime: form.elements.compensatoryTime.checked,
       errorLimitId: form.elements.errorLimitId.value,
       customErrorPercent: form.elements.customErrorPercent.value,
+      dictation: form.elements.dictation.value || 'off',
+      dictationHide: form.elements.dictationHide.checked,
+      dictationPunctuation: form.elements.dictationPunctuation.checked,
+      dictationUnit: form.elements.dictationUnit.value,
+      dictationSize: form.elements.dictationSize.value,
+      dictationLead: form.elements.dictationLead.value,
+      idleAction: form.elements.idleAction.value,
+      idleSeconds: form.elements.idleSeconds.value,
+      speechRate: form.elements.speechRate.value,
+      // Voices load late; until the list arrives, keep the saved choice.
+      voiceURI: form.elements.voiceURI.options.length > 1 ? form.elements.voiceURI.value : setup.voiceURI,
     };
     store.saveSetup(setup);
   };
@@ -276,6 +305,25 @@ function initSetupView() {
     select.value = keep ? setup.passageId : 'random';
   };
 
+  const renderVoiceOptions = (lang) => {
+    const select = $('#voice-select');
+    const voices = voicesFor(lang);
+    const loaded = voicesLoaded();
+    const key = `${lang}:${loaded}:${voices.map((v) => v.voiceURI).join('|')}`;
+    if (select.dataset.key === key) return;
+    select.dataset.key = key;
+    select.replaceChildren(
+      h('option', { value: '', text: 'Device default' }),
+      ...voices.map((v) => h('option', { value: v.voiceURI, text: `${v.name} (${v.lang})` })),
+    );
+    select.value = voices.some((v) => v.voiceURI === setup.voiceURI) ? setup.voiceURI : '';
+    $('#voice-hint').textContent = voices.length || !loaded
+      ? ''
+      : lang === 'hi'
+        ? 'No Hindi voice was found on this device. Add one in your system’s speech settings, or use Chrome, which includes one.'
+        : 'No English voice was found on this device, so the default voice will be used.';
+  };
+
   const refresh = () => {
     const preset = findPreset(setup.presetId);
     const config = resolveConfig(setup);
@@ -288,6 +336,19 @@ function initSetupView() {
     $('#own-passage-count').textContent = ownWords ? `${plural(ownWords, 'word')}.` : '';
     $('#custom-error-field').hidden = setup.errorLimitId !== 'custom';
 
+    const canSpeak = speechSupported();
+    const output = setup.dictation;
+    $('#dictation-mode-hint').textContent = DICTATION_HINTS[output] ?? '';
+    $('#dictation-unsupported').hidden = canSpeak || output !== 'voice';
+    $('#dictation-options').hidden = output === 'off' || (output === 'voice' && !canSpeak);
+    $('#voice-fields').hidden = output !== 'voice';
+    $('#dictation-size-field').hidden = setup.dictationUnit !== 'words';
+    $('#idle-seconds-field').hidden = setup.idleAction === 'off';
+    const rate = nf1.format(Number(setup.speechRate) || 1);
+    $('#speech-rate-out').textContent = `${rate}×`;
+    form.elements.speechRate.setAttribute('aria-valuetext', `${rate} times normal speed`);
+    if (canSpeak) renderVoiceOptions(config.lang);
+
     const targetText = config.targetWpm
       ? `${nf0.format(config.targetKeys)} key depressions (${config.targetWpm} WPM)`
       : `${nf0.format(config.targetKeys)} key depressions`;
@@ -299,6 +360,7 @@ function initSetupView() {
       ['Error limit', `${nf1.format(config.maxErrorPercent)}%`],
       ['Mode', MODE_LABEL[config.mode]],
       ['Backspace', config.backspace ? 'Allowed' : 'Not allowed'],
+      ['Dictation', dictationSummary(config.dictation)],
     ];
     $('#setup-summary').replaceChildren(...rows.flatMap(([k, v]) => [h('dt', { text: k }), h('dd', { text: v })]));
   };
@@ -307,6 +369,11 @@ function initSetupView() {
     $('#setup-error').textContent = '';
     read();
     refresh();
+  });
+  onVoicesChanged(refresh);
+  $('#voice-preview').addEventListener('click', () => {
+    const { lang, dictation } = resolveConfig({ ...setup, dictation: 'voice' });
+    previewVoice({ lang, voiceURI: dictation.voiceURI, rate: dictation.rate });
   });
 
   form.addEventListener('submit', (e) => {
@@ -344,10 +411,23 @@ function validateSetup() {
       return { message: 'Enter an error limit between 0 and 100 percent.', field: form.elements.customErrorPercent };
     }
   }
+  if (setup.dictation === 'voice' && !speechSupported()) {
+    return {
+      message: 'This browser cannot read text aloud. Choose “My screen reader” or turn off dictation.',
+      field: form.querySelector('input[name="dictation"]:checked'),
+    };
+  }
   if (setup.passageId === 'own' && tokenize(setup.ownPassage).length < 5) {
     return { message: 'Your passage needs at least 5 words.', field: form.elements.ownPassage };
   }
   return null;
+}
+
+function dictationSummary(d) {
+  if (!d) return 'Off';
+  const parts = [DICTATION_LABEL[d.output], d.unit === 'words' ? `${d.size} words at a time` : 'sentence by sentence'];
+  if (d.hide) parts.push('passage hidden');
+  return parts.join(', ');
 }
 
 function choosePassage(config, { avoid = lastPassageId } = {}) {
@@ -368,6 +448,7 @@ const input = () => $('#typing-input');
 
 function startTest(config, passage) {
   stopClock();
+  stopDictation();
   lastPassageId = passage.id;
   session = {
     config,
@@ -392,6 +473,7 @@ function startTest(config, passage) {
     endNotified: false,
     frame: 0,
     tick: 0,
+    dictator: null,
   };
   renderTest();
   navigate('test');
@@ -417,6 +499,13 @@ function renderTest() {
     return p;
   });
   box.replaceChildren(...paragraphs);
+  const listenOnly = Boolean(config.dictation?.hide);
+  box.hidden = listenOnly;
+  $('#passage-hidden-note').hidden = !listenOnly;
+  $('#dictation-bar').hidden = !config.dictation;
+  $('#dictation-bar').classList.remove('is-speaking');
+  $('#dictation-text').textContent = 'Dictation starts in a moment.';
+  $('#announce-dictation').textContent = '';
 
   const field = input();
   field.value = '';
@@ -448,11 +537,53 @@ function onTestShown() {
   const { config, passage } = session;
   input().focus();
   if (!config.startOnType) startClock();
-  announce(
+  const intro =
     `${config.presetName}, ${MODE_LABEL[config.mode]}. ${fmtSpoken(config.durationMs / 1000)}. ` +
     `Passage: ${passage.title}, ${plural(session.words.length, 'word')}. ` +
-    (config.startOnType ? 'The timer starts when you begin typing.' : 'The timer has started.'),
-  );
+    (config.startOnType ? 'The timer starts when you begin typing.' : 'The timer has started.') +
+    (config.dictation?.output === 'screenreader' ? ' Dictation through your screen reader is on.' : '') +
+    (config.dictation?.output === 'voice' ? ' Dictation is on.' : '');
+  announce(intro);
+  if (config.dictation) {
+    const current = session;
+    current.dictator = createDictator({
+      words: current.words,
+      lang: passage.lang,
+      options: config.dictation,
+      announce: (text) => announceDictation(text, passage.lang),
+      onChange: showDictationState,
+    });
+    // Let the screen reader finish (most of) the introduction first; a dictated part would cut it off.
+    const delay = config.dictation.output === 'screenreader' ? Math.min(screenReaderDuration(intro), 6000) : 1200;
+    setTimeout(() => {
+      if (session === current && current.state !== 'done') current.dictator.start();
+    }, delay);
+  }
+}
+
+/** Screen-reader dictation: its own live region, marked with the passage language. */
+let dictationTimer = 0;
+function announceDictation(text, lang) {
+  const el = $('#announce-dictation');
+  clearTimeout(dictationTimer);
+  el.lang = lang;
+  el.textContent = '';
+  dictationTimer = setTimeout(() => { el.textContent = text; }, 60);
+}
+
+function stopDictation() {
+  session?.dictator?.stop();
+  clearTimeout(dictationTimer);
+  $('#announce-dictation').textContent = '';
+}
+
+function showDictationState({ part, total, speaking, done }) {
+  $('#dictation-bar').classList.toggle('is-speaking', speaking);
+  $('#dictation-text').textContent = done
+    ? 'Dictation finished.'
+    : speaking
+      ? `Reading part ${part + 1} of ${total}`
+      : `Part ${part + 1} of ${total} read`;
 }
 
 const elapsed = () =>
@@ -511,6 +642,7 @@ function togglePause() {
     input().readOnly = true;
     btn.textContent = 'Resume';
     setStatus('Paused. Select Resume to carry on.');
+    session.dictator?.pause();
     announce('Test paused.');
   } else if (session.state === 'paused') {
     session.state = 'running';
@@ -520,6 +652,7 @@ function togglePause() {
     btn.textContent = 'Pause';
     setStatus('');
     announce('Test resumed.');
+    session.dictator?.resume();
     input().focus();
   }
 }
@@ -559,7 +692,9 @@ function initTestView() {
     if (t.startsWith('delete')) session.deletions += 1;
     else if (t !== 'insertCompositionText') session.inserts += Math.max(1, Array.from(e.data ?? '').length);
     if (session.state === 'ready') startClock();
-    if (!session.frame) session.frame = requestAnimationFrame(onTextChanged);
+    // Coalesce bursts of input into one update. A timer, not requestAnimationFrame, so updates (and
+    // dictation) keep going even when the browser is not painting.
+    if (!session.frame) session.frame = setTimeout(onTextChanged, 0);
   });
   field.addEventListener('compositionend', (e) => {
     if (session) session.inserts += Array.from(e.data ?? '').length;
@@ -571,13 +706,17 @@ function initTestView() {
   document.addEventListener('keydown', (e) => {
     if (!session || currentView !== 'test') return;
     if (!e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey) return;
-    const aid = { KeyN: 'next', KeyW: 'word', KeyS: 'spell', KeyT: 'time', KeyP: 'progress' }[e.code];
+    const aid = { KeyN: 'next', KeyW: 'word', KeyS: 'spell', KeyT: 'time', KeyP: 'progress', KeyR: 'repeat' }[e.code];
     if (aid) {
       e.preventDefault();
       readingAid(aid);
     }
   });
   $$('[data-aid]').forEach((btn) => btn.addEventListener('click', () => readingAid(btn.dataset.aid)));
+  $('#dictation-repeat').addEventListener('click', () => {
+    readingAid('repeat');
+    if (session && session.state !== 'paused') input().focus();
+  });
 
   window.addEventListener('beforeunload', (e) => {
     if (session && session.state !== 'ready') {
@@ -604,6 +743,7 @@ function onTextChanged() {
   session.currentIndex = Math.min(Math.max(0, completed + offset), words.length);
   session.typedCount = typed.length;
   session.keys = countKeys(text);
+  session.dictator?.progress(session.currentIndex);
 
   if (config.mode === 'practice') {
     const { marks } = session;
@@ -713,6 +853,10 @@ function readingAid(kind) {
       announce(msg, { assertive: true });
       break;
     }
+    case 'repeat':
+      if (session.dictator && session.state !== 'paused') session.dictator.repeat();
+      else announce(session.dictator ? 'The test is paused.' : 'Dictation is off for this test.', { assertive: true });
+      break;
     case 'progress': {
       const mins = elapsed() / 60000;
       const wpm = mins > 0.05 ? Math.round(session.keys / 5 / mins) : 0;
@@ -756,8 +900,9 @@ async function requestSubmit() {
 
 function abandonTest() {
   stopClock();
-  if (session?.frame) cancelAnimationFrame(session.frame);
+  if (session?.frame) clearTimeout(session.frame);
   if (session) clearTimeout(session.alignTimer);
+  stopDictation();
   session = null;
 }
 
@@ -767,6 +912,7 @@ function finishTest({ byTimer }) {
   const elapsedMs = byTimer ? session.config.durationMs : elapsed();
   stopClock();
   clearTimeout(session.alignTimer);
+  stopDictation();
   session.state = 'done';
   input().readOnly = true;
   const { config, passage } = session;
@@ -797,6 +943,7 @@ function finishTest({ byTimer }) {
       lang: config.lang,
       passageId: passage.id,
       passageTitle: passage.title,
+      dictation: config.dictation?.output ?? 'off',
       durationMs: config.durationMs,
       elapsedMs,
       netWpm: result.netWpm,
@@ -846,7 +993,8 @@ function renderResults() {
   const { config, passage, result: r, verdict, byTimer } = lastResult;
   const lang = config.lang;
   $('#results-meta').replaceChildren(
-    `${config.presetName} · ${MODE_LABEL[config.mode]} · `,
+    `${config.presetName} · ${MODE_LABEL[config.mode]}` +
+      `${config.dictation ? ` · Dictation (${DICTATION_LABEL[config.dictation.output].toLowerCase()})` : ''} · `,
     h('span', { lang: passage.lang, text: passage.title }),
     ` · ${dateFmt.format(new Date(lastResult.date))}`,
   );

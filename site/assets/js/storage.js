@@ -30,6 +30,16 @@ export const DEFAULT_SETUP = {
   compensatoryTime: false,
   errorLimitId: 'ur',
   customErrorPercent: 7,
+  dictation: 'off', // off | voice (device speech) | screenreader (live region, no device speech)
+  dictationHide: false,
+  dictationPunctuation: false,
+  dictationUnit: 'sentence', // sentence | words
+  dictationSize: 8, // words per part when dictationUnit is 'words'
+  dictationLead: 2, // read the next part when this many words of the last part are left
+  idleAction: 'repeat', // repeat | next | off
+  idleSeconds: 6,
+  voiceURI: '',
+  speechRate: 1,
 };
 
 function read(key, fallback) {
@@ -53,7 +63,12 @@ function write(key, value) {
 export const loadSettings = () => ({ ...DEFAULT_SETTINGS, ...read(KEY_SETTINGS, {}) });
 export const saveSettings = (s) => write(KEY_SETTINGS, s);
 
-export const loadSetup = () => ({ ...DEFAULT_SETUP, ...read(KEY_SETUP, {}) });
+export function loadSetup() {
+  const setup = { ...DEFAULT_SETUP, ...read(KEY_SETUP, {}) };
+  // Dictation was an on/off switch for the device voice before the screen-reader option existed.
+  if (typeof setup.dictation === 'boolean') setup.dictation = setup.dictation ? 'voice' : 'off';
+  return setup;
+}
 export const saveSetup = (s) => write(KEY_SETUP, s);
 
 export function loadHistory() {

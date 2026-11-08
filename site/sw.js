@@ -14,6 +14,7 @@ const ASSETS = [
   './assets/js/passages.js',
   './assets/js/presets.js',
   './assets/js/storage.js',
+  './assets/js/dictation.js',
   './assets/icons/icon.svg',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',

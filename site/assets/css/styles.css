@@ -303,6 +303,7 @@ input[type="number"], input[type="text"], select, textarea {
   min-height: 2.75rem;
   width: 100%;
 }
+input[type="number"], input[type="text"], select { height: 2.75rem; }
 select { padding-right: 2rem; }
 textarea { resize: vertical; line-height: 1.5; }
 input[type="radio"], input[type="checkbox"] {
@@ -504,6 +505,34 @@ input[type="range"] { width: 100%; accent-color: var(--primary); min-height: 2.7
   width: fit-content;
 }
 .aid-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-top: 0.25rem; }
+
+.dictation-options { margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.dictation-options .field-row { margin-top: 1rem; }
+.dictation-options .field-row + .field-row { margin-top: 0; }
+.dictation-options .field-row .field { margin-bottom: 1rem; }
+.dictation-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-weight: 600;
+}
+.dictation-bar.is-speaking { border-color: var(--primary); box-shadow: inset 4px 0 0 var(--primary); }
+.dictation-icon { width: 1.4rem; height: 1.4rem; color: var(--primary); flex: none; }
+.dictation-bar .btn { margin-left: auto; }
+.passage-hidden-note {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 1.05rem;
+}
 
 /* ---------- Results ---------- */
 

@@ -11,6 +11,7 @@ Live at **https://typeout.wondrellabs.com** once deployed.
 - **Exam patterns**: SSC CHSL English (10 min, 35 WPM), SSC CHSL Hindi (10 min, 30 WPM), SSC CGL DEST (15 min, 2,000 key depressions), a 2-minute quick drill, and a custom pattern.
 - **Two modes**: *Exam simulation* has no highlighting and no pause, like the SSC software. *Practice* highlights the current word, marks wrong words as you type and lets you pause.
 - **SSC-style marking**: your text is lined up with the passage word by word. Missed, extra and wrong words are full mistakes. Spacing, capital letters, punctuation and word order are half mistakes. You get gross and net WPM, KDPH, error percentage and a pass or fail against your target and error limit.
+- **Dictation**: the passage is read aloud in parts (a sentence or a set number of words), a few words ahead of you. Choose **Device voice** (speech synthesis only, nothing sent to screen readers), **My screen reader** (parts go to the screen reader through a live region, device voice silent) or **Off**. An idle timer either repeats the part, reads the next part anyway, or waits. You can hide the passage to type only from what you hear, have punctuation spoken, and pick the device voice and speed.
 - **Mistake review**: a table of every mistake, plus the passage with your mistakes marked inline (shown with symbols and text, not colour alone).
 - **Rules you can set**: backspace on or off, timer starting on the first key press, compensatory time for PwBD candidates (20 min per hour), and the error limit (UR 7%, reserved categories 10%, or a custom value).
 - **Passages**: 8 English and 4 Hindi passages written for this app, or paste your own.
@@ -32,6 +33,7 @@ site/                 ← the app (static, no framework); copied to dist/ by the
   assets/js/passages.js  passage bank
   assets/js/presets.js   exam patterns and error limits
   assets/js/storage.js   localStorage wrapper
+  assets/js/dictation.js read-aloud dictation (Web Speech API)
   assets/js/theme-init.js applies the saved theme before first paint
 scripts/build.mjs        builds dist/ for deployment
 tests/scoring.test.mjs   Node test suite for the scoring engine
@@ -50,7 +52,7 @@ npm test
 npm start
 ```
 
-Then open http://localhost:8080. `npm start` uses Python's built-in server. You can also run `npx serve site` or any other static server. The service worker is turned off on localhost, so your edits always show.
+Then open http://localhost:8080. `npm start` runs a small Node server (`scripts/serve.mjs`) that turns caching off and applies the same security headers as production, so policy problems show up before you deploy. The service worker is turned off on localhost.
 
 `npm run build` runs the tests and writes the deployable site to `dist/`, stamping the service worker cache with the commit.
 

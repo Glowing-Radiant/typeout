@@ -110,6 +110,71 @@
               <p class="hint" id="own-passage-hint">Paste or type any text. It stays in this browser. <span id="own-passage-count"></span></p>
             </div>
           </div>
+
+          <fieldset class="card">
+            <legend class="card-title">Dictation</legend>
+            <fieldset class="inline-group" aria-describedby="dictation-mode-hint">
+              <legend>Read the passage aloud while I type</legend>
+              <label class="choice"><input type="radio" name="dictation" value="off"> Off</label>
+              <label class="choice"><input type="radio" name="dictation" value="voice"> Device voice</label>
+              <label class="choice"><input type="radio" name="dictation" value="screenreader"> My screen reader</label>
+            </fieldset>
+            <p class="hint" id="dictation-mode-hint"></p>
+            <p class="error-text" id="dictation-unsupported" hidden>This browser cannot read text aloud. Choose “My screen reader”, or try Chrome, Edge or Safari.</p>
+            <div class="dictation-options" id="dictation-options" hidden>
+              <label class="check"><input type="checkbox" name="dictationHide" aria-describedby="dictation-hide-hint"> Hide the passage (listen only)</label>
+              <p class="hint" id="dictation-hide-hint">Your typing is still compared with the passage at the end.</p>
+              <label class="check"><input type="checkbox" name="dictationPunctuation"> Say punctuation aloud, such as “comma” and “full stop”</label>
+              <div class="field-row">
+                <div class="field">
+                  <label for="dictation-unit">Read in parts of</label>
+                  <select id="dictation-unit" name="dictationUnit">
+                    <option value="sentence">One sentence</option>
+                    <option value="words">A set number of words</option>
+                  </select>
+                </div>
+                <div class="field" id="dictation-size-field">
+                  <label for="dictation-size">Words in each part</label>
+                  <input id="dictation-size" name="dictationSize" type="number" inputmode="numeric" min="3" max="30" step="1">
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="dictation-lead">Read the next part when this many words are left</label>
+                  <input id="dictation-lead" name="dictationLead" type="number" inputmode="numeric" min="0" max="10" step="1">
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="idle-action">When I stop typing</label>
+                  <select id="idle-action" name="idleAction" aria-describedby="idle-hint">
+                    <option value="repeat">Repeat the current part</option>
+                    <option value="next">Read the next part anyway</option>
+                    <option value="off">Wait for me</option>
+                  </select>
+                </div>
+                <div class="field" id="idle-seconds-field">
+                  <label for="idle-seconds">After this many seconds</label>
+                  <input id="idle-seconds" name="idleSeconds" type="number" inputmode="numeric" min="2" max="60" step="1">
+                </div>
+              </div>
+              <p class="hint" id="idle-hint">“Read the next part anyway” keeps a steady pace, like a real dictation. “Repeat” plays the part again, up to three times in a row.</p>
+              <div id="voice-fields">
+              <div class="field-row">
+                <div class="field">
+                  <label for="voice-select">Voice</label>
+                  <select id="voice-select" name="voiceURI" aria-describedby="voice-hint"></select>
+                </div>
+                <div class="field">
+                  <label for="speech-rate">Speaking speed <output id="speech-rate-out" for="speech-rate"></output></label>
+                  <input id="speech-rate" name="speechRate" type="range" min="0.5" max="1.5" step="0.1">
+                </div>
+              </div>
+              <p class="hint" id="voice-hint"></p>
+              <button type="button" class="btn btn-small" id="voice-preview">Play a sample</button>
+              </div>
+            </div>
+          </fieldset>
         </div>
 
         <div class="setup-side">
@@ -164,12 +229,19 @@
 
       <p class="test-status" id="test-status"></p>
 
+      <div class="dictation-bar" id="dictation-bar" hidden>
+        <svg class="dictation-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3Zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4ZM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6Z"/></svg>
+        <span id="dictation-text">Dictation</span>
+        <button type="button" class="btn btn-small" id="dictation-repeat">Repeat part <kbd>Alt+Shift+R</kbd></button>
+      </div>
+
       <div class="passage" id="passage" tabindex="0" role="region" aria-label="Passage to type"></div>
+      <p class="passage-hidden-note" id="passage-hidden-note" hidden>The passage is hidden for this dictation. Listen and type. Press <kbd>Alt+Shift+R</kbd> to hear the current part again.</p>
 
       <div class="typing-wrap">
         <label for="typing-input" class="typing-label">Type the passage here</label>
         <textarea id="typing-input" class="typing-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" data-gramm="false" aria-describedby="typing-help"></textarea>
-        <p class="hint" id="typing-help">Pasting is turned off. Reading aids: Alt+Shift+N reads the next words, Alt+Shift+W the current word, Alt+Shift+S spells it, Alt+Shift+T tells the time left and Alt+Shift+P your progress.</p>
+        <p class="hint" id="typing-help">Pasting is turned off. Reading aids: Alt+Shift+N reads the next words, Alt+Shift+W the current word, Alt+Shift+S spells it, Alt+Shift+T tells the time left, Alt+Shift+P your progress and Alt+Shift+R repeats the dictation.</p>
       </div>
 
       <details class="reading-aids">
@@ -345,6 +417,7 @@
         <ul>
           <li><a href="#guide-patterns">Exam patterns</a></li>
           <li><a href="#guide-marking">How marking works</a></li>
+          <li><a href="#guide-dictation">Dictation</a></li>
           <li><a href="#guide-keys">Keyboard shortcuts</a></li>
           <li><a href="#guide-hindi">Typing in Hindi</a></li>
           <li><a href="#guide-a11y">Accessibility</a></li>
@@ -392,6 +465,22 @@
           <li>You meet the standard when you reach the target key depressions in the time allowed and your error percentage is within the limit.</li>
         </ul>
 
+        <h2 id="guide-dictation" tabindex="-1">Dictation</h2>
+        <p>Choose how <strong>Dictation</strong> reads the passage to you when you set up a test:</p>
+        <ul>
+          <li><strong>Device voice</strong>: your device's speech voice reads each part. Nothing is sent to your screen reader.</li>
+          <li><strong>My screen reader</strong>: each part is sent to your screen reader, which reads it in its own voice and speed. The device voice stays silent. Turning off typed-character echo in your screen reader stops it talking over the dictation.</li>
+          <li><strong>Off</strong>: nothing is read aloud.</li>
+        </ul>
+        <ul>
+          <li><strong>Parts</strong> are one sentence at a time or a set number of words.</li>
+          <li><strong>The next part</strong> is read when only a few words of the last part are left to type. You choose how many.</li>
+          <li><strong>When you stop typing</strong> for the number of seconds you choose, the current part is repeated (up to three times), or the next part is read anyway so the dictation keeps a steady pace. You can also turn this off.</li>
+          <li><strong>Listen only</strong> hides the passage, so you type from what you hear. Your text is still marked against the passage.</li>
+          <li>You can have punctuation spoken (“comma”, “full stop”), choose the device voice and its speed, and repeat the current part at any time with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>.</li>
+        </ul>
+        <p>Device voices come from your device. For Hindi, you may need to add a Hindi voice in your system's speech settings, or use Chrome, which includes one. With your screen reader, Hindi parts are marked as Hindi so it can switch to a Hindi voice if you have one.</p>
+
         <h2 id="guide-keys" tabindex="-1">Keyboard shortcuts</h2>
         <p>These work while you are in the typing box or the passage. Screen reader users can read the passage with the usual reading keys at any time.</p>
         <div class="table-scroll" tabindex="0" role="region" aria-label="Keyboard shortcuts">
@@ -403,6 +492,7 @@
               <tr><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td><td>Spell the current word letter by letter</td></tr>
               <tr><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></td><td>Say the time left</td></tr>
               <tr><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></td><td>Say words typed and current speed</td></tr>
+              <tr><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td><td>Repeat the current dictation part</td></tr>
             </tbody>
           </table>
         </div>
@@ -433,6 +523,7 @@
 
   <div class="sr-only" id="announce-polite" aria-live="polite" aria-atomic="true"></div>
   <div class="sr-only" id="announce-assertive" aria-live="assertive" aria-atomic="true"></div>
+  <div class="sr-only" id="announce-dictation" aria-live="assertive" aria-atomic="true"></div>
 
   <dialog id="dialog" class="dialog" aria-labelledby="dialog-title" aria-describedby="dialog-body">
     <h2 id="dialog-title"></h2>
