@@ -1,8 +1,17 @@
-// Offline support. scripts/build.mjs replaces __BUILD__ with the commit SHA, so every deploy gets a
-// fresh cache and old ones are removed on activation.
-// The page is cached as './' (not './index.html'): hosts such as Cloudflare Pages redirect /index.html,
-// and a redirected response cannot be served for a navigation.
-const CACHE = 'typeout-__BUILD__';
+// Offline support.
+//
+// scripts/build.mjs stamps VERSION with the build id and adds ?v=<build> to every script and
+// stylesheet the pages load. So:
+//   - pages are fetched from the network first, and only fall back to the cache when offline;
+//   - scripts and styles are cached by their versioned URL, which never changes within a build, so
+//     a new page always loads files from its own build and never a stale copy;
+//   - each deploy installs a new worker with a new cache, and the old cache is deleted.
+// The page is cached as './' (not './index.html'): hosts such as Cloudflare Pages redirect
+// /index.html, and a redirected response cannot be served for a navigation.
+const VERSION = '__BUILD__';
+const CACHE = `typeout-${VERSION}`;
+
+const versioned = (path) => (/\.(js|css)$/.test(path) ? `${path}?v=${VERSION}` : path);
 
 const ASSETS = [
   './',
@@ -18,10 +27,18 @@ const ASSETS = [
   './assets/icons/icon.svg',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
-];
+].map(versioned);
+
+const PRECACHED = new Set(ASSETS.map((path) => new URL(path, self.location).href));
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      // cache: 'reload' skips the browser's HTTP cache, so the new worker never stores old files.
+      .then((cache) => cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' }))))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -34,15 +51,19 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
 
-  // Pages: network first so a new deploy shows up straight away; fall back to the cache offline.
+  // Pages: network first, so a new deploy shows up straight away; fall back to the cache offline.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          if (res.ok && !res.redirected) caches.open(CACHE).then((c) => c.put('./', copy));
+          if (res.ok && !res.redirected) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put('./', copy));
+          }
           return res;
         })
         .catch(() => caches.match('./')),
@@ -50,19 +71,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Assets: serve from cache, refresh in the background.
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(request, copy));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    }),
-  );
+  // Precached files (versioned scripts and styles, icons, manifest): cache first, network if missing.
+  // Anything else, such as the app's own update check, goes straight to the network.
+  if (!PRECACHED.has(url.href)) return;
+  event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
 });

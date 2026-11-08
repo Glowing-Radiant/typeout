@@ -1,10 +1,10 @@
-// Local dev server: serves site/ with the same headers as production (site/_headers) and caching off,
+// Local dev server: serves site/ (or the folder given, e.g. dist) with the same headers as production (site/_headers) and caching off,
 // so edits always show and Content-Security-Policy problems surface before deploy.
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 
-const root = resolve('site');
+const root = resolve(process.argv[2] || 'site');
 const port = Number(process.env.PORT) || 8080;
 
 const TYPES = {

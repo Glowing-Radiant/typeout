@@ -1367,6 +1367,7 @@ function show(requested) {
   if (name === 'settings') syncSettingsForm();
 
   window.scrollTo(0, 0);
+  showUpdateNotice();
   if (name === 'test') onTestShown();
   else if (!first) $(`[data-view="${name}"] h1`)?.focus();
 }
@@ -1414,8 +1415,54 @@ function onDocumentClick(e) {
 function registerServiceWorker() {
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   if ('serviceWorker' in navigator && location.protocol === 'https:' && !local) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   }
+}
+
+/* ------------------------------------------------------------------ updates */
+
+// The build adds ?v=<build> to this module's URL (it is absent in local development). A tab left
+// open keeps running the build it loaded, so now and then compare it with the live page and offer
+// a reload. Reloading always gets the new build: pages are fetched from the network first and
+// every script and stylesheet URL carries the build.
+const BUILD = new URL(import.meta.url).searchParams.get('v');
+const UPDATE_CHECK_GAP = 5 * 60000;
+let updateReady = false;
+let lastUpdateCheck = 0;
+
+async function checkForUpdate() {
+  if (!BUILD || updateReady || Date.now() - lastUpdateCheck < UPDATE_CHECK_GAP) return;
+  lastUpdateCheck = Date.now();
+  try {
+    const res = await fetch(`./?update-check=${Date.now()}`, { cache: 'no-store' });
+    const live = (await res.text()).match(/assets\/js\/app\.js\?v=([\w-]+)/u)?.[1];
+    if (live && live !== BUILD) {
+      updateReady = true;
+      showUpdateNotice();
+    }
+  } catch {
+    // Offline or the check failed; try again later.
+  }
+}
+
+/** Never during a test: the notice waits until the candidate has finished. */
+function showUpdateNotice() {
+  const box = $('#update-notice');
+  box.hidden = currentView === 'test';
+  if (!updateReady || box.hidden || box.childElementCount) return;
+  box.append(
+    h('p', { text: 'A new version of Type Out is ready.' }),
+    h('button', { type: 'button', class: 'btn btn-small btn-primary', text: 'Reload to update', onclick: () => location.reload() }),
+  );
+}
+
+function watchForUpdates() {
+  if (!BUILD) return;
+  setTimeout(checkForUpdate, 15000);
+  setInterval(checkForUpdate, 30 * 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
 }
 
 applySettings();
@@ -1428,3 +1475,4 @@ document.addEventListener('click', onDocumentClick);
 window.addEventListener('hashchange', onHashChange);
 show(routeFromHash());
 registerServiceWorker();
+watchForUpdates();

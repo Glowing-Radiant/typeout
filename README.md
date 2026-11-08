@@ -52,9 +52,18 @@ npm test
 npm start
 ```
 
+`npm run preview` builds the site and serves `dist/` the same way, to check the production build.
+
 Then open http://localhost:8080. `npm start` runs a small Node server (`scripts/serve.mjs`) that turns caching off and applies the same security headers as production, so policy problems show up before you deploy. The service worker is turned off on localhost.
 
-`npm run build` runs the tests and writes the deployable site to `dist/`, stamping the service worker cache with the commit.
+`npm run build` runs the tests and writes the deployable site to `dist/`. It adds `?v=<build>` to every script and stylesheet reference (HTML, module imports and the service worker's file list), so visitors never get a mix of old and new files after a deploy, and it fails if any reference is left unversioned.
+
+### How updates reach visitors
+
+- Pages are fetched from the network first; the offline copy is only used when there is no connection.
+- Scripts and styles are cached by their versioned URL, so a fresh page always loads its own build.
+- Each deploy installs a new service worker with a new cache and deletes the old one.
+- A tab left open checks for a newer build every 30 minutes and when it comes back into view, and offers **Reload to update**. The notice never appears during a test.
 
 ## Deploy to Cloudflare Pages
 
