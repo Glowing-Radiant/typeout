@@ -3,7 +3,7 @@
 // Each local .js/.css reference (in the HTML pages, in module imports and in the service worker's
 // precache list) gets ?v=<build>. A freshly loaded page therefore only ever loads files from its own
 // build, never a stale copy from a browser or service-worker cache, and the service worker can cache
-// those files without re-checking them. Used by Cloudflare Pages (build command: npm run build).
+// those files without re-checking them. Used by Cloudflare Workers Builds (build command: npm run build).
 import { cpSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 

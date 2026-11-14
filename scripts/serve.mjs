@@ -26,7 +26,7 @@ for (const line of (await readFile(join(root, '_headers'), 'utf8')).split(/\r?\n
   }
 }
 
-// The API (Cloudflare Pages Functions in production) runs here too, with a local SQLite file standing
+// The API (the Cloudflare Worker in production) runs here too, with a local SQLite file standing
 // in for D1. Passages still come from the real Wikipedia.
 const apiModule = await import('../server/api.js');
 const { mkdirSync } = await import('node:fs');

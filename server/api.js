@@ -1,4 +1,4 @@
-// Type Out API, run as Cloudflare Pages Functions (see functions/api/) with a D1 database bound as DB.
+// Type Out API, run by the Cloudflare Worker in server/worker.js with a D1 database bound as DB.
 //
 //   GET  /api/passage?lang=en|hi          a new passage from Wikipedia (stored, so scores on it can be checked)
 //   GET  /api/scores?board=…&period=…     top 10 for a scoreboard

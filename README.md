@@ -26,7 +26,7 @@ Live at **https://typeout.wondrellabs.com** once deployed.
 site/                 ← the app (static, no framework); copied to dist/ by the build
   index.html
   404.html            shown for unknown paths
-  _headers            security headers for Cloudflare Pages
+  _headers            security headers for the static files (Workers static assets)
   manifest.webmanifest, sw.js
   assets/css/styles.css
   assets/js/app.js       UI, routing, test engine
@@ -38,7 +38,8 @@ site/                 ← the app (static, no framework); copied to dist/ by the
   assets/js/online.js    online passages (fetched ahead, kept in localStorage) and scoreboard calls
   assets/js/leaderboard.js scoreboard rules and name checks, shared with the server
   assets/js/theme-init.js applies the saved theme before first paint
-functions/api/           Cloudflare Pages Functions: /api/passage and /api/scores (thin wrappers)
+server/worker.js         Cloudflare Worker entry: sends /api/* to the API, everything else is static
+wrangler.jsonc           Worker configuration: static assets from dist/, the D1 binding
 server/api.js            the API: passages, scores, re-marking, rate limit, D1 schema
 server/wikipedia.js      fetches and cleans Wikipedia passages
 scripts/build.mjs        builds dist/ for deployment
@@ -75,34 +76,28 @@ The same server runs the API. Passages come from the real Wikipedia, and scores 
 - Each deploy installs a new service worker with a new cache and deletes the old one.
 - A tab left open checks for a newer build every 30 minutes and when it comes back into view, and offers **Reload to update**. The notice never appears during a test.
 
-## Deploy to Cloudflare Pages
+## Deploy to Cloudflare Workers
 
-`wondrellabs.com` is on Cloudflare DNS, so the subdomain connects in one step.
+The site runs as a Cloudflare Worker with static assets, configured in `wrangler.jsonc`. The files in `dist/` are served directly. Only `/api/*` runs the Worker script (`server/worker.js`), which uses a D1 database for the scoreboard. All of this fits the Workers Free plan. `wondrellabs.com` is on Cloudflare DNS, so the subdomain connects in one step.
 
-1. In the Cloudflare dashboard, open **Workers & Pages → Create → Pages → Connect to Git**, and choose the `Glowing-Radiant/typeout` repository.
-2. Use these build settings:
+1. Create the database: in the Cloudflare dashboard, open **Storage & Databases → D1 SQL Database → Create**, name it `typeout`, and copy its **Database ID**.
+2. In `wrangler.jsonc`, paste the ID over `REPLACE_WITH_D1_DATABASE_ID`. Check that `name` matches the Worker's name in the dashboard; otherwise the deploy creates a second Worker. The ID is not a secret.
+3. Connect the repository: **Workers & Pages → Create → Import a repository**, choose `Glowing-Radiant/typeout`, and use these build settings (on an existing Worker they are under **Settings → Build**):
 
    | Setting | Value |
    |---|---|
    | Production branch | `main` |
-   | Framework preset | None |
    | Build command | `npm run build` |
-   | Build output directory | `dist` |
+   | Deploy command | `npx wrangler deploy` |
 
    No environment variables are needed. If the build complains about the Node version, add `NODE_VERSION` = `22`.
-   The `functions/` folder is picked up automatically and served under `/api/`.
-3. **Save and Deploy.** The first build runs the tests and publishes to `typeout.pages.dev` (or a similar `*.pages.dev` name).
-4. Open the project's **Custom domains** tab, select **Set up a custom domain**, enter `typeout.wondrellabs.com` and activate it. Cloudflare creates the DNS record and the certificate for you.
-
-5. Set up the scoreboard database (online passages work without it, but scores on them can't be checked):
-   1. Open **Storage & Databases → D1 SQL Database → Create**, and name it `typeout`.
-   2. In the Pages project, open **Settings → Bindings → Add → D1 database**. Set the variable name to `DB`, choose `typeout`, and save. Do this for Production, and for Preview too if you want the scoreboard on preview URLs.
-   3. Redeploy (**Deployments → … → Retry deployment**), because bindings only take effect on a new deployment.
-
-   The tables are created on first use, so there is no schema to run.
+4. Push, or retry the latest build. The deploy reads `wrangler.jsonc`, uploads `dist/` and the script, and attaches the database. The tables are created on first use, so there is no schema to run.
+5. Under the Worker's **Settings → Domains & Routes**, add the custom domain `typeout.wondrellabs.com`. Cloudflare creates the DNS record and the certificate.
 6. Optional: under **Settings → Variables and Secrets**, add a secret `SCORE_SALT` set to any random text. It goes into the daily code used for rate limiting.
 
-Every push to `main` then redeploys automatically. Pull requests get their own preview URLs. Builds run on Cloudflare, so they do not use GitHub Actions minutes.
+Bindings come from `wrangler.jsonc`, not the dashboard. Each deploy replaces what is in the dashboard with what is in the file.
+
+Every push to `main` then redeploys automatically. Builds run on Cloudflare, so they do not use GitHub Actions minutes.
 
 `site/_headers` sets the security headers, including a strict Content Security Policy with no inline scripts or styles. Keep scripts and styles in files under `site/assets/`, or the policy will block them.
 

@@ -1,0 +1,24 @@
+// Cloudflare Workers configuration, used by `npx wrangler deploy` in Workers Builds.
+// The site is served as static assets from dist/ (built by `npm run build`); only /api/* runs the
+// Worker script, which needs the D1 database below for the scoreboard.
+{
+  // Must match the name of the existing Worker in the Cloudflare dashboard, or a new Worker is created.
+  "name": "typeout",
+  "main": "server/worker.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "typeout",
+      // Paste the Database ID from Storage & Databases → D1 → typeout.
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+  "observability": { "enabled": true }
+}

@@ -210,3 +210,17 @@ test('online passages are stored so scores on them can be checked', { skip }, as
 test('built-in passages can be found by the server', () => {
   assert.equal(findPassage(builtIn.id).text, builtIn.text);
 });
+
+test('the Worker sends /api/* to the API and everything else to static assets', { skip }, async () => {
+  const { default: worker } = await import('../server/worker.js');
+  const env = await freshEnv();
+  const served = [];
+  env.ASSETS = { fetch: async (req) => { served.push(new URL(req.url).pathname); return new Response('asset'); } };
+  const scores = await worker.fetch(new Request('http://x/api/scores?board=chsl-en'), env);
+  assert.equal(scores.status, 200);
+  assert.deepEqual((await scores.json()).entries, []);
+  assert.equal((await worker.fetch(new Request('http://x/api/nope'), env)).status, 404);
+  assert.equal((await worker.fetch(new Request('http://x/api/scores', { method: 'DELETE' }), env)).status, 404);
+  assert.equal(await (await worker.fetch(new Request('http://x/index.html'), env)).text(), 'asset');
+  assert.deepEqual(served, ['/index.html']);
+});
