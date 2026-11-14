@@ -67,7 +67,7 @@ test('eligibility follows the scoreboard rules', () => {
   assert.equal(eligibility({ ...base, result }).ok, true);
   assert.equal(eligibility({ ...base, mode: 'practice', result }).ok, true, 'Practice has its own scoreboard');
   assert.equal(eligibility({ ...base, mode: 'turbo', result }).ok, false);
-  assert.equal(eligibility({ ...base, presetId: 'quick', result }).ok, false);
+  assert.equal(eligibility({ ...base, presetId: 'custom', result }).ok, false);
   assert.equal(eligibility({ ...base, passageId: 'own', result }).ok, false);
   assert.equal(eligibility({ ...base, passageLang: 'hi', result }).ok, false);
   const early = evaluate({ passage: builtIn.text, typed, elapsedMs: 300000 });
@@ -151,7 +151,7 @@ test('attempts that break the rules are refused with a reason', { skip }, async 
   const env = await freshEnv();
   const cases = [
     [{ name: 'x' }, 400, /2 to 24/],
-    [{ presetId: 'quick' }, 400, /no scoreboard/],
+    [{ presetId: 'custom' }, 400, /no scoreboard/],
     [{ passageId: 'own' }, 400, /cannot be checked/],
     [{ passageId: 'wiki-en-1-2' }, 400, /cannot be checked/],
     [{ mode: 'turbo' }, 422, /Exam simulation and Practice/],
@@ -242,4 +242,39 @@ test('Practice and Exam simulation scores go on separate scoreboards', { skip },
   assert.deepEqual(practiceBoard.entries.map((e) => e.name), ['Ravi']);
   assert.deepEqual(defaultBoard.entries.map((e) => e.name), ['Asha'], 'no mode means Exam simulation');
   assert.equal((await get(env, 'board=chsl-en&mode=turbo')).status, 400);
+});
+
+test('the Quick drill has a scoreboard for each language', { skip }, async () => {
+  const env = await freshEnv();
+  const hindi = PASSAGES.find((p) => p.lang === 'hi');
+  const drill = (passage, extra = {}) => {
+    const typed = passage.text.split(/\s+/u).slice(0, 220).join(' ');
+    return attempt({ presetId: 'quick', passageId: passage.id, typed, elapsedMs: 120000, byTimer: true, keystrokes: typed.length, ...extra });
+  };
+  const en = await post(env, drill(builtIn, { name: 'Asha' }));
+  assert.equal(en.status, 201, await en.clone().text());
+  assert.equal((await en.json()).boardName, 'Quick drill – English');
+  const hi = await post(env, drill(hindi, { name: 'Ravi' }), '198.51.100.2');
+  assert.equal(hi.status, 201, await hi.clone().text());
+  assert.equal((await hi.json()).boardName, 'Quick drill – Hindi');
+  const practice = await post(env, drill(hindi, { name: 'Meena', mode: 'practice' }), '198.51.100.3');
+  assert.equal((await practice.json()).boardName, 'Quick drill – Hindi (Practice)');
+
+  const names = async (q) => (await (await get(env, q)).json()).entries.map((e) => e.name);
+  assert.deepEqual(await names('board=quick-en'), ['Asha']);
+  assert.deepEqual(await names('board=quick-hi'), ['Ravi']);
+  assert.deepEqual(await names('board=quick-hi&mode=practice'), ['Meena']);
+  assert.deepEqual(await names('board=chsl-en'), [], 'drills stay off the CHSL board');
+  assert.equal((await get(env, 'board=quick')).status, 400);
+});
+
+test('Quick drill attempts follow the same rules as the exam patterns', () => {
+  const typed = words.slice(0, 220).join(' ');
+  const result = evaluate({ passage: builtIn.text, typed, elapsedMs: 120000, endedByTimer: true });
+  const base = { presetId: 'quick', mode: 'exam', passageId: builtIn.id, passageLang: 'en', byTimer: true, compensatoryTime: false };
+  assert.equal(eligibility({ ...base, result }).ok, true);
+  assert.equal(eligibility({ ...base, passageLang: 'hi', result }).ok, true, 'either language');
+  const short = evaluate({ passage: builtIn.text, typed: words.slice(0, 40).join(' '), elapsedMs: 120000, endedByTimer: true });
+  assert.match(eligibility({ ...base, result: short }).reason, /target speed/);
+  assert.match(eligibility({ ...base, presetId: 'custom', result }).reason, /Quick drill/);
 });

@@ -1,9 +1,24 @@
 // Scoreboard rules, shared by the page (to say up front whether an attempt can be shared) and the
 // server (which re-marks every shared attempt and applies the same rules). Pure, no DOM access.
-import { findPreset, resolveConfig } from './presets.js';
+import { LANG_LABEL, findPreset, resolveConfig } from './presets.js';
 
-/** Exam patterns with a scoreboard, in display order. */
-export const BOARDS = ['chsl-en', 'chsl-hi', 'cgl-dest'];
+/**
+ * Scoreboards, in display order. A pattern with a fixed language has one board; Quick drill, where
+ * the candidate picks the language, has one per language. The id is what scores are stored under
+ * (the CHSL and DEST ids are the pattern ids, as they always were).
+ */
+export const BOARDS = [
+  { id: 'chsl-en', presetId: 'chsl-en', lang: 'en' },
+  { id: 'chsl-hi', presetId: 'chsl-hi', lang: 'hi' },
+  { id: 'cgl-dest', presetId: 'cgl-dest', lang: 'en' },
+  { id: 'quick-en', presetId: 'quick', lang: 'en' },
+  { id: 'quick-hi', presetId: 'quick', lang: 'hi' },
+];
+
+/** The board for an attempt on this pattern in this language, or null if there is none. */
+export const findBoard = (presetId, lang) => BOARDS.find((b) => b.presetId === presetId && b.lang === lang) ?? null;
+export const getBoard = (id) => BOARDS.find((b) => b.id === id) ?? null;
+export const hasBoard = (presetId) => BOARDS.some((b) => b.presetId === presetId);
 
 /**
  * Each pattern has one scoreboard per mode. Practice highlights the passage and allows pausing, so
@@ -11,8 +26,8 @@ export const BOARDS = ['chsl-en', 'chsl-hi', 'cgl-dest'];
  */
 export const MODES = { exam: 'Exam simulation', practice: 'Practice' };
 
-/** The key a score is stored under: the pattern for Exam simulation, pattern + "-practice" for Practice. */
-export const boardKey = (presetId, mode) => (mode === 'practice' ? `${presetId}-practice` : presetId);
+/** The key a score is stored under: the board id for Exam simulation, board id + "-practice" for Practice. */
+export const boardKey = (boardId, mode) => (mode === 'practice' ? `${boardId}-practice` : boardId);
 
 /** The most lenient official error limit (reserved categories), so no candidate is left out. */
 export const BOARD_MAX_ERROR_PERCENT = 10;
@@ -28,7 +43,14 @@ export const NAME_MAX = 24;
 
 export const PERIODS = { all: 'All time', week: 'Last 7 days' };
 
-export const boardName = (id, mode = 'exam') => `${findPreset(id).name}${mode === 'practice' ? ' (Practice)' : ''}`;
+/** "SSC CHSL – English", "Quick drill – Hindi (Practice)" and so on. */
+export function boardName(boardId, mode = 'exam') {
+  const board = getBoard(boardId);
+  if (!board) return '';
+  const preset = findPreset(board.presetId);
+  const name = preset.lang ? preset.name : `${preset.name} – ${LANG_LABEL[board.lang]}`;
+  return `${name}${mode === 'practice' ? ' (Practice)' : ''}`;
+}
 
 /** Time allowed for a scoreboard pattern, with or without compensatory time. */
 export function boardDuration(presetId, compensatoryTime) {
@@ -53,11 +75,10 @@ export function boardTargetKeys(presetId) {
  */
 export function eligibility({ presetId, mode, passageId, passageLang, byTimer, compensatoryTime, result }) {
   const no = (reason) => ({ ok: false, reason });
-  if (!BOARDS.includes(presetId)) return no('Only SSC CHSL English, SSC CHSL Hindi and SSC CGL DEST attempts can be shared.');
-  const preset = findPreset(presetId);
+  if (!hasBoard(presetId)) return no('Only SSC CHSL English, SSC CHSL Hindi, SSC CGL DEST and Quick drill attempts can be shared.');
   if (!MODES[mode]) return no('Only Exam simulation and Practice attempts can be shared.');
   if (!passageId || passageId === 'own') return no('Attempts on your own passage cannot be shared, because the server cannot check them.');
-  if (passageLang !== preset.lang) return no('The passage is not in the language of this exam pattern.');
+  if (!findBoard(presetId, passageLang)) return no('The passage is not in the language of this exam pattern.');
   if (!result || result.typedWords === 0) return no('Nothing was typed.');
   if (!byTimer && !result.reachedEnd) return no('To share a score, keep typing until the time runs out or you reach the end of the passage.');
   if (result.elapsedMs < MIN_ELAPSED_MS) return no('The attempt was shorter than a minute.');

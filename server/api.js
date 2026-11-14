@@ -9,7 +9,7 @@
 import { evaluate } from '../site/assets/js/scoring.js';
 import { findPassage } from '../site/assets/js/passages.js';
 import {
-  BOARDS, MODES, PERIODS, boardDuration, boardKey, boardName, cleanName, eligibility,
+  BOARDS, MODES, PERIODS, boardDuration, boardKey, boardName, cleanName, eligibility, findBoard, getBoard, hasBoard,
 } from '../site/assets/js/leaderboard.js';
 import { fetchWikipediaPassage } from './wikipedia.js';
 
@@ -188,10 +188,10 @@ async function topScores(db, board, period) {
 
 export async function handleScoresGet(request, env) {
   const params = new URL(request.url).searchParams;
-  const board = params.get('board') ?? BOARDS[0];
+  const board = params.get('board') ?? BOARDS[0].id;
   const mode = params.get('mode') ?? 'exam';
   const period = params.get('period') ?? 'all';
-  if (!BOARDS.includes(board)) return fail(400, 'Unknown scoreboard.');
+  if (!getBoard(board)) return fail(400, 'Unknown scoreboard.');
   if (!MODES[mode]) return fail(400, 'mode must be exam or practice.');
   if (!PERIODS[period]) return fail(400, 'period must be all or week.');
   const db = await database(env).catch(() => null);
@@ -217,7 +217,7 @@ export async function handleScoresPost(request, env) {
   const { presetId, mode, passageId, typed, elapsedMs, byTimer, compensatoryTime, keystrokes } = body;
   const checkedName = cleanName(body.name);
   if (checkedName.error) return fail(400, checkedName.error);
-  if (!BOARDS.includes(presetId)) return fail(400, 'This exam pattern has no scoreboard.');
+  if (!hasBoard(presetId)) return fail(400, 'This exam pattern has no scoreboard.');
   if (typeof typed !== 'string' || typed.length > MAX_TYPED_CHARS) return fail(400, 'The typed text is missing or too long.');
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return fail(400, 'The time taken is missing.');
   if (typeof byTimer !== 'boolean') return fail(400, 'Whether the time ran out is missing.');
@@ -251,7 +251,8 @@ export async function handleScoresPost(request, env) {
 
   const now = Date.now();
   const netWpm = round1(result.netWpm);
-  const key = boardKey(presetId, mode);
+  const board = findBoard(presetId, passage.lang); // eligibility() has checked there is one
+  const key = boardKey(board.id, mode);
   await db.prepare(
     `INSERT INTO scores (board, name, name_key, net_wpm, gross_wpm, error_percent, key_depressions, elapsed_ms,
        passage_id, passage_title, client, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -269,9 +270,9 @@ export async function handleScoresPost(request, env) {
     .bind(key, checkedName.key).first('best');
 
   return json({
-    board: presetId,
+    board: board.id,
     mode,
-    boardName: boardName(presetId, mode),
+    boardName: boardName(board.id, mode),
     netWpm,
     personalBest,
     position: ahead + 1,

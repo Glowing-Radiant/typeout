@@ -4,7 +4,7 @@ import { PRESETS, ERROR_LIMITS, LANG_LABEL, findPreset, resolveConfig } from './
 import * as store from './storage.js';
 import { fetchScoreboard, isOnlinePassage, prefetchPassages, shareScore, takeOnlinePassage } from './online.js';
 import {
-  BOARDS, BOARD_MAX_ERROR_PERCENT, MIN_ELAPSED_MS, MODES, NAME_MAX, PERIODS, boardName, cleanName, eligibility,
+  BOARDS, BOARD_MAX_ERROR_PERCENT, MIN_ELAPSED_MS, MODES, NAME_MAX, PERIODS, boardName, cleanName, eligibility, findBoard,
 } from './leaderboard.js';
 import {
   createDictator, onVoicesChanged, previewVoice, screenReaderDuration, speechSupported, voicesFor, voicesLoaded,
@@ -1169,13 +1169,12 @@ let scoresBoard = null; // scoreboard to open next ({board, mode}), set when com
 function renderShare() {
   const body = $('#share-body');
   const { config, passage, result, byTimer } = lastResult;
+  const board = findBoard(config.presetId, passage.lang);
   const seeBoard = () => h('a', {
     href: '#/scores',
-    text: BOARDS.includes(config.presetId)
-      ? `See the ${config.presetShort}${config.mode === 'practice' ? ' Practice' : ''} scoreboard`
-      : 'See the scoreboard',
+    text: board ? `See the ${boardName(board.id, config.mode)} scoreboard` : 'See the scoreboard',
     onclick: () => {
-      scoresBoard = BOARDS.includes(config.presetId) ? { board: config.presetId, mode: config.mode } : null;
+      scoresBoard = board ? { board: board.id, mode: config.mode } : null;
     },
   });
 
@@ -1211,7 +1210,7 @@ function renderShare() {
   const error = h('p', { class: 'error-text', id: 'share-error', role: 'alert' });
   const status = h('p', { class: 'hint', role: 'status' });
   const form = h('form', { class: 'share-form', novalidate: true },
-    h('p', { text: `This attempt can go on the ${boardName(config.presetId, config.mode)} scoreboard. Sharing is up to you.` }),
+    h('p', { text: `This attempt can go on the ${boardName(board.id, config.mode)} scoreboard. Sharing is up to you.` }),
     h('div', { class: 'field' }, h('label', { for: 'share-name', text: 'Name to show' }), nameInput),
     h('p', {
       class: 'hint',
@@ -1268,7 +1267,7 @@ function renderShare() {
 const scoreDate = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
 function initScoresView() {
-  $('#scores-board').append(...BOARDS.map((id) => h('option', { value: id, text: boardName(id) })));
+  $('#scores-board').append(...BOARDS.map((b) => h('option', { value: b.id, text: boardName(b.id) })));
   $('#scores-mode').append(...Object.entries(MODES).map(([id, label]) => h('option', { value: id, text: label })));
   $('#scores-period').append(...Object.entries(PERIODS).map(([id, label]) => h('option', { value: id, text: label })));
   $('#scores-board').addEventListener('change', () => renderScores());
@@ -1276,7 +1275,7 @@ function initScoresView() {
   $('#scores-period').addEventListener('change', () => renderScores());
   $('#scores-rules').append(
     ...[
-      'SSC CHSL English, SSC CHSL Hindi or SSC CGL DEST. Exam simulation and Practice each have their own scoreboard.',
+      'SSC CHSL English, SSC CHSL Hindi, SSC CGL DEST or Quick drill (English and Hindi each have a board). Exam simulation and Practice each have their own scoreboard.',
       'A built-in or online passage, not your own text.',
       'Keep typing until the time is up, or reach the end of the passage.',
       'Reach the target key depressions for the pattern.',
@@ -1296,8 +1295,9 @@ async function renderScores() {
     scoresBoard = null;
   } else if (!boardSelect.dataset.chosen) {
     // First visit: open the board for the pattern and mode the candidate practises.
-    const { presetId, mode } = resolveConfig(setup);
-    if (BOARDS.includes(presetId)) boardSelect.value = presetId;
+    const { presetId, lang, mode } = resolveConfig(setup);
+    const board = findBoard(presetId, lang);
+    if (board) boardSelect.value = board.id;
     modeSelect.value = mode;
   }
   boardSelect.dataset.chosen = 'true';
