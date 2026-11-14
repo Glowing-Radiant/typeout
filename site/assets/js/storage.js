@@ -1,9 +1,11 @@
-// Everything Type Out remembers lives in this browser's localStorage. Storage can be unavailable
+// Everything Type Out remembers lives in this browser's localStorage (online passages fetched ahead
+// of time are kept there too, by online.js). Storage can be unavailable
 // (private windows, blocked site data), so every access is guarded and the app works without it.
 
 const KEY_SETTINGS = 'typeout:settings:v1';
 const KEY_SETUP = 'typeout:setup:v1';
 const KEY_HISTORY = 'typeout:history:v1';
+const KEY_SHARE_NAME = 'typeout:share-name:v1';
 const HISTORY_LIMIT = 300;
 
 export const DEFAULT_SETTINGS = {
@@ -23,7 +25,7 @@ export const DEFAULT_SETUP = {
   customMinutes: 10,
   customWpm: 35,
   mode: 'exam',
-  passageId: 'random',
+  passageId: 'online', // online | random (built-in) | a built-in passage id | own
   ownPassage: '',
   backspace: true,
   startOnType: true,
@@ -83,3 +85,10 @@ export function addHistory(entry) {
 }
 
 export const clearHistory = () => write(KEY_HISTORY, []);
+
+/** The name last used on the scoreboard, offered again next time. */
+export const loadShareName = () => {
+  const name = read(KEY_SHARE_NAME, '');
+  return typeof name === 'string' ? name : '';
+};
+export const saveShareName = (name) => write(KEY_SHARE_NAME, name);

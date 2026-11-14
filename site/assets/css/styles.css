@@ -257,6 +257,7 @@ kbd {
 }
 .footer-inner { padding-block: 1.25rem; }
 .footer-inner p { margin: 0.25rem 0; }
+.footer-inner a { color: inherit; }
 
 .update-notice {
   display: flex;
@@ -368,6 +369,8 @@ input[type="range"] { width: 100%; accent-color: var(--primary); min-height: 2.7
 .btn-block { width: 100%; }
 .btn-small { min-height: 2.5rem; padding: 0.4rem 0.8rem; font-size: 0.95rem; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+/* Busy (fetching): still focusable, so focus is not lost while it waits. */
+.btn[aria-disabled="true"] { opacity: 0.7; cursor: progress; }
 .btn kbd { font-weight: 500; }
 
 .actions-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
@@ -747,3 +750,15 @@ output { font-weight: 700; color: var(--primary); margin-left: 0.35rem; }
   .card, .stat, .verdict { box-shadow: none; break-inside: avoid; }
   .annotated { max-height: none; overflow: visible; }
 }
+
+/* ---------- Online passages and scoreboard ---------- */
+
+.passage-credit { margin-top: 1rem; }
+.share-form .field { max-width: 24rem; }
+.share-form > p:first-child { margin-top: 0; }
+.share-done { font-weight: 600; margin-top: 0; }
+.plain-list { margin: 0 0 1rem; padding-left: 1.25rem; }
+.plain-list li { margin-bottom: 0.35rem; }
+.data-table tr.is-you > * { background: var(--primary-soft); }
+.data-table tr.is-you th { font-weight: 700; }
+:root[data-theme="contrast"] .data-table tr.is-you th { text-decoration: underline; }

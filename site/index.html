@@ -34,6 +34,7 @@
         <ul>
           <li><a href="#/practice" data-nav="practice">Practice</a></li>
           <li><a href="#/progress" data-nav="progress">Progress</a></li>
+          <li><a href="#/scores" data-nav="scores">Scoreboard</a></li>
           <li><a href="#/settings" data-nav="settings">Settings</a></li>
           <li><a href="#/guide" data-nav="guide">Guide</a></li>
         </ul>
@@ -106,8 +107,9 @@
             <h2 class="card-title">Passage</h2>
             <div class="field">
               <label for="passage-select">Passage to type</label>
-              <select id="passage-select" name="passageId"></select>
+              <select id="passage-select" name="passageId" aria-describedby="passage-hint"></select>
             </div>
+            <p class="hint" id="passage-hint"></p>
             <div class="field" id="own-passage-field" hidden>
               <label for="own-passage">Your passage</label>
               <textarea id="own-passage" name="ownPassage" rows="6" aria-describedby="own-passage-hint"></textarea>
@@ -203,7 +205,8 @@
           <div class="card summary-card">
             <h2 class="card-title">Summary</h2>
             <dl class="summary-list" id="setup-summary"></dl>
-            <button type="submit" class="btn btn-primary btn-block">Start test</button>
+            <button type="submit" class="btn btn-primary btn-block" id="start-btn">Start test</button>
+            <p class="hint" id="setup-status" role="status"></p>
             <p class="error-text" id="setup-error" role="alert"></p>
           </div>
         </div>
@@ -258,6 +261,7 @@
           <button type="button" class="btn btn-small" data-aid="progress">Progress <kbd>Alt+Shift+P</kbd></button>
         </div>
       </details>
+      <p class="hint passage-credit" id="test-credit" hidden></p>
     </section>
 
     <!-- ============ Results ============ -->
@@ -299,6 +303,12 @@
           <li><span class="mk mk-half"><s>Half</s> <span class="exp">half,</span></span> Spacing, capitals, punctuation or word order (half)</li>
         </ul>
         <div class="annotated" id="annotated"></div>
+        <p class="hint passage-credit" id="results-credit" hidden></p>
+      </div>
+
+      <div class="card share-card" id="share-card">
+        <h2 class="card-title" id="share-heading">Scoreboard</h2>
+        <div id="share-body"></div>
       </div>
 
       <div class="actions-row">
@@ -313,7 +323,7 @@
     <section class="view container" data-view="progress" aria-labelledby="progress-heading" hidden>
       <div class="page-head">
         <h1 id="progress-heading" tabindex="-1">Progress</h1>
-        <p class="lede">Your results are saved only in this browser.</p>
+        <p class="lede">Your results are saved only in this browser. Scores you choose to share also appear on the <a href="#/scores">scoreboard</a>.</p>
       </div>
       <div id="progress-empty" class="card empty" hidden>
         <p>You have not finished a test yet. Your speed and accuracy will appear here after your first attempt.</p>
@@ -342,6 +352,36 @@
             <button type="button" class="btn btn-danger" id="clear-btn">Delete all results</button>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ Scoreboard ============ -->
+    <section class="view container" data-view="scores" aria-labelledby="scores-heading" hidden>
+      <div class="page-head">
+        <h1 id="scores-heading" tabindex="-1">Scoreboard</h1>
+        <p class="lede">The 10 best shared scores for each exam pattern, by net speed. Each name appears once, with its best score.</p>
+      </div>
+      <div class="filter-row">
+        <div class="field">
+          <label for="scores-board">Exam pattern</label>
+          <select id="scores-board"></select>
+        </div>
+        <div class="field">
+          <label for="scores-period">Period</label>
+          <select id="scores-period"></select>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-title" id="scores-table-heading">Top 10</h2>
+        <p class="hint" id="scores-status" role="status"></p>
+        <div class="table-scroll" tabindex="0" role="region" aria-labelledby="scores-table-heading" id="scores-scroll" hidden>
+          <table class="data-table" id="scores-table"></table>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">How to get on the scoreboard</h2>
+        <ul class="plain-list" id="scores-rules"></ul>
+        <p class="hint">Scores are shared only when you choose to. The server marks your typed text again before saving a score. It keeps your name, the result, the passage and a daily-changing code made from your connection, which is used only to stop too many shares in a short time.</p>
       </div>
     </section>
 
@@ -422,6 +462,7 @@
           <li><a href="#guide-patterns">Exam patterns</a></li>
           <li><a href="#guide-marking">How marking works</a></li>
           <li><a href="#guide-dictation">Dictation</a></li>
+          <li><a href="#guide-online">Online passages and the scoreboard</a></li>
           <li><a href="#guide-keys">Keyboard shortcuts</a></li>
           <li><a href="#guide-hindi">Typing in Hindi</a></li>
           <li><a href="#guide-a11y">Accessibility</a></li>
@@ -485,6 +526,11 @@
         </ul>
         <p>Device voices come from your device. For Hindi, you may need to add a Hindi voice in your system's speech settings, or use Chrome, which includes one. With your screen reader, Hindi parts are marked as Hindi so it can switch to a Hindi voice if you have one.</p>
 
+        <h2 id="guide-online" tabindex="-1">Online passages and the scoreboard</h2>
+        <p><strong>New passage each time</strong> takes a fresh passage from Wikipedia for every test, on subjects like the economy, the environment, science, history and public services, so you never run out of practice text. The text is cleaned up for typing: headings, references, lists, bracketed notes and most figures are removed, and curly quotes and long dashes become keys on an ordinary keyboard. Each passage names its article and the CC BY-SA 4.0 licence. Wikipedia articles are not written in the style of SSC passages, so expect more names and technical words.</p>
+        <p>A couple of passages are fetched ahead of time and kept in this browser, so a test starts straight away and still works for a while without a connection. If none is available, a built-in passage is used instead.</p>
+        <p>After an <strong>Exam simulation</strong> attempt on SSC CHSL English, SSC CHSL Hindi or SSC CGL DEST, you can share your score under a name you choose. To be shared, an attempt has to run until the time is up or reach the end of the passage, reach the target key depressions and stay within 10% errors. Your typed text is sent with the score so the server can mark it again with the same rules. The scoreboard shows the 10 best names for each pattern, all time or for the last 7 days.</p>
+
         <h2 id="guide-keys" tabindex="-1">Keyboard shortcuts</h2>
         <p>These work while you are in the typing box or the passage. Screen reader users can read the passage with the usual reading keys at any time.</p>
         <div class="table-scroll" tabindex="0" role="region" aria-label="Keyboard shortcuts">
@@ -521,7 +567,7 @@
   <footer class="site-footer">
     <div class="container footer-inner">
       <p>Type Out is an independent practice tool. It is not affiliated with the Staff Selection Commission.</p>
-      <p>Works offline once loaded. Your results never leave this device.</p>
+      <p>Works offline once loaded. Your results stay on this device unless you choose to share a score. Online passages come from <a href="https://www.wikipedia.org/">Wikipedia</a> under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.</p>
     </div>
   </footer>
 

@@ -24,6 +24,8 @@ const ASSETS = [
   './assets/js/presets.js',
   './assets/js/storage.js',
   './assets/js/dictation.js',
+  './assets/js/online.js',
+  './assets/js/leaderboard.js',
   './assets/icons/icon.svg',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
@@ -72,7 +74,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Precached files (versioned scripts and styles, icons, manifest): cache first, network if missing.
-  // Anything else, such as the app's own update check, goes straight to the network.
+  // Anything else, such as the app's own update check and the API, goes straight to the network.
   if (!PRECACHED.has(url.href)) return;
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
 });

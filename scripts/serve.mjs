@@ -1,8 +1,9 @@
-// Local dev server: serves site/ (or the folder given, e.g. dist) with the same headers as production (site/_headers) and caching off,
+// Local dev server: serves site/ (or the folder given, e.g. dist) and the API, with the same headers as production (site/_headers) and caching off,
 // so edits always show and Content-Security-Policy problems surface before deploy.
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
+import { createD1 } from './dev-d1.mjs';
 
 const root = resolve(process.argv[2] || 'site');
 const port = Number(process.env.PORT) || 8080;
@@ -25,8 +26,44 @@ for (const line of (await readFile(join(root, '_headers'), 'utf8')).split(/\r?\n
   }
 }
 
+// The API (Cloudflare Pages Functions in production) runs here too, with a local SQLite file standing
+// in for D1. Passages still come from the real Wikipedia.
+const apiModule = await import('../server/api.js');
+const { mkdirSync } = await import('node:fs');
+mkdirSync('.dev', { recursive: true });
+const env = { DB: await createD1('.dev/typeout.sqlite') };
+const API = {
+  'GET /api/passage': apiModule.handlePassage,
+  'GET /api/scores': apiModule.handleScoresGet,
+  'POST /api/scores': apiModule.handleScoresPost,
+};
+
+async function serveApi(req, res, handler) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const request = new Request(new URL(req.url, `http://localhost:${port}`), {
+    method: req.method,
+    headers: { ...req.headers, 'CF-Connecting-IP': req.socket.remoteAddress ?? '' },
+    body: req.method === 'GET' || req.method === 'HEAD' ? undefined : Buffer.concat(chunks),
+  });
+  let response;
+  try {
+    response = await handler(request, env);
+  } catch (err) {
+    console.error(err);
+    response = new Response(JSON.stringify({ error: 'Server error.' }), { status: 500 });
+  }
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  res.end(Buffer.from(await response.arrayBuffer()));
+}
+
 createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  const handler = API[`${req.method} ${path}`];
+  if (handler) {
+    await serveApi(req, res, handler);
+    return;
+  }
   let file = normalize(join(root, path));
   if (!file.startsWith(root)) {
     res.writeHead(403).end();

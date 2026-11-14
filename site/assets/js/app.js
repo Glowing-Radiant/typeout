@@ -2,6 +2,10 @@ import { evaluate, qualify, tokenize, countKeys, align } from './scoring.js';
 import { passagesFor, findPassage } from './passages.js';
 import { PRESETS, ERROR_LIMITS, LANG_LABEL, findPreset, resolveConfig } from './presets.js';
 import * as store from './storage.js';
+import { fetchScoreboard, isOnlinePassage, prefetchPassages, shareScore, takeOnlinePassage } from './online.js';
+import {
+  BOARDS, BOARD_MAX_ERROR_PERCENT, MIN_ELAPSED_MS, NAME_MAX, PERIODS, boardName, cleanName, eligibility,
+} from './leaderboard.js';
 import {
   createDictator, onVoicesChanged, previewVoice, screenReaderDuration, speechSupported, voicesFor, voicesLoaded,
 } from './dictation.js';
@@ -295,13 +299,14 @@ function initSetupView() {
     select.dataset.lang = lang;
     const list = passagesFor(lang);
     select.replaceChildren(
-      h('option', { value: 'random', text: 'Random passage' }),
-      h('optgroup', { label: `${LANG_LABEL[lang]} passages` },
+      h('option', { value: 'online', text: 'New passage each time (from Wikipedia)' }),
+      h('option', { value: 'random', text: 'Random built-in passage' }),
+      h('optgroup', { label: `Built-in ${LANG_LABEL[lang]} passages` },
         ...list.map((p) => h('option', { value: p.id, text: p.title, lang: p.lang })),
       ),
       h('option', { value: 'own', text: 'My own passage…' }),
     );
-    const keep = setup.passageId === 'own' || list.some((p) => p.id === setup.passageId);
+    const keep = ['own', 'online'].includes(setup.passageId) || list.some((p) => p.id === setup.passageId);
     select.value = keep ? setup.passageId : 'random';
   };
 
@@ -331,6 +336,11 @@ function initSetupView() {
     $('#custom-numbers').hidden = preset.id !== 'custom';
     renderPassageOptions(config.lang);
     $('#own-passage-field').hidden = $('#passage-select').value !== 'own';
+    const online = $('#passage-select').value === 'online';
+    $('#passage-hint').textContent = online
+      ? 'A different passage for every test, on subjects like the economy, environment and science. Without a connection, a built-in passage is used.'
+      : '';
+    if (online) prefetchPassages(config.lang);
     $('#own-passage').lang = config.lang;
     const ownWords = tokenize(setup.ownPassage).length;
     $('#own-passage-count').textContent = ownWords ? `${plural(ownWords, 'word')}.` : '';
@@ -376,8 +386,10 @@ function initSetupView() {
     previewVoice({ lang, voiceURI: dictation.voiceURI, rate: dictation.rate });
   });
 
-  form.addEventListener('submit', (e) => {
+  let starting = false;
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (starting) return;
     read();
     const error = validateSetup();
     if (error) {
@@ -386,7 +398,19 @@ function initSetupView() {
       return;
     }
     const config = resolveConfig(setup);
-    startTest(config, choosePassage(config));
+    const button = $('#start-btn');
+    starting = true;
+    button.setAttribute('aria-disabled', 'true');
+    const slow = setTimeout(() => { $('#setup-status').textContent = 'Getting a new passage…'; }, 300);
+    try {
+      const { passage, notice } = await getPassage(config);
+      if (currentView === 'practice') startTest(config, passage, { notice });
+    } finally {
+      clearTimeout(slow);
+      $('#setup-status').textContent = '';
+      button.removeAttribute('aria-disabled');
+      starting = false;
+    }
   });
 
   fill();
@@ -430,6 +454,16 @@ function dictationSummary(d) {
   return parts.join(', ');
 }
 
+const OFFLINE_NOTICE = 'A new online passage could not be fetched, so a built-in passage is used.';
+
+/** The passage for a new test: online when chosen (falling back to built-in), otherwise built-in or own. */
+async function getPassage(config, { avoid = lastPassageId } = {}) {
+  if (setup.passageId !== 'online') return { passage: choosePassage(config, { avoid }) };
+  const passage = await takeOnlinePassage(config.lang, { avoid });
+  if (passage) return { passage };
+  return { passage: choosePassage(config, { avoid }), notice: OFFLINE_NOTICE };
+}
+
 function choosePassage(config, { avoid = lastPassageId } = {}) {
   if (setup.passageId === 'own') {
     return { id: 'own', title: 'Your own passage', lang: config.lang, text: setup.ownPassage.trim() };
@@ -446,7 +480,7 @@ function choosePassage(config, { avoid = lastPassageId } = {}) {
 
 const input = () => $('#typing-input');
 
-function startTest(config, passage) {
+function startTest(config, passage, { notice = '' } = {}) {
   stopClock();
   stopDictation();
   lastPassageId = passage.id;
@@ -476,6 +510,7 @@ function startTest(config, passage) {
     dictator: null,
   };
   renderTest();
+  if (notice) setStatus(`${notice} ${$('#test-status').textContent}`.trim());
   navigate('test');
 }
 
@@ -525,6 +560,24 @@ function renderTest() {
   $('#timer').classList.remove('is-low');
   setStatus(config.startOnType ? 'The timer starts when you begin typing.' : '');
   if (config.mode === 'practice') paintWords();
+  renderCredit($('#test-credit'), passage);
+}
+
+/** Wikipedia passages name their article and licence (CC BY-SA asks for both). */
+function renderCredit(el, passage) {
+  el.hidden = !isOnlinePassage(passage);
+  if (el.hidden) {
+    el.replaceChildren();
+    return;
+  }
+  const link = (href, text, lang) => h('a', { href, text, lang, target: '_blank', rel: 'noopener noreferrer' });
+  el.replaceChildren(
+    'Passage adapted from the Wikipedia article ',
+    link(passage.source.url, passage.title, passage.lang),
+    ', licensed ',
+    link(passage.source.licenseUrl, passage.source.license),
+    '.',
+  );
 }
 
 function setStatus(text, { alert = false } = {}) {
@@ -1100,6 +1153,183 @@ function renderResults() {
   }
 
   renderAnnotated(r, lang);
+  renderCredit($('#results-credit'), passage);
+  renderShare();
+}
+
+/* ------------------------------------------------------------------ sharing a score */
+
+let scoresBoard = null; // scoreboard to open next, set when coming from a result
+
+/** Fill the scoreboard card on the results view. Returns an element to focus, if any. */
+function renderShare() {
+  const body = $('#share-body');
+  const { config, passage, result, byTimer } = lastResult;
+  const seeBoard = () => h('a', {
+    href: '#/scores',
+    text: BOARDS.includes(config.presetId) ? `See the ${config.presetShort} scoreboard` : 'See the scoreboard',
+    onclick: () => { scoresBoard = BOARDS.includes(config.presetId) ? config.presetId : null; },
+  });
+
+  if (lastResult.shared) {
+    const s = lastResult.shared;
+    const message = h('p', { class: 'share-done', tabindex: '-1' },
+      `Shared. Your net speed of ${nf1.format(s.netWpm)} WPM puts you at number ${nf0.format(s.position)} on the ` +
+        `${s.boardName} scoreboard${s.position <= 10 ? ', in the top 10.' : '.'}`,
+      s.personalBest > s.netWpm ? ` The scoreboard shows your best under this name, ${nf1.format(s.personalBest)} WPM.` : '');
+    body.replaceChildren(message, h('p', {}, seeBoard()));
+    return message;
+  }
+
+  const check = eligibility({
+    presetId: config.presetId,
+    mode: config.mode,
+    passageId: passage.id,
+    passageLang: passage.lang,
+    byTimer,
+    compensatoryTime: config.compensatoryTime,
+    result,
+  });
+  if (!check.ok) {
+    body.replaceChildren(h('p', { text: `This attempt cannot go on the scoreboard. ${check.reason}` }), h('p', {}, seeBoard()));
+    return null;
+  }
+
+  const nameInput = h('input', {
+    id: 'share-name', name: 'name', type: 'text', maxlength: String(NAME_MAX), autocomplete: 'nickname',
+    spellcheck: 'false', 'aria-describedby': 'share-hint share-error', value: store.loadShareName(),
+  });
+  const button = h('button', { type: 'submit', class: 'btn btn-primary', text: 'Share my score' });
+  const error = h('p', { class: 'error-text', id: 'share-error', role: 'alert' });
+  const status = h('p', { class: 'hint', role: 'status' });
+  const form = h('form', { class: 'share-form', novalidate: true },
+    h('p', { text: `This attempt can go on the ${config.presetName} scoreboard. Sharing is up to you.` }),
+    h('div', { class: 'field' }, h('label', { for: 'share-name', text: 'Name to show' }), nameInput),
+    h('p', {
+      class: 'hint',
+      id: 'share-hint',
+      text: 'Everyone can see this name. Your typed text and the time taken are sent with the score, so the server can mark it again. Nothing else about you is shared.',
+    }),
+    button, error, status);
+
+  let busy = false;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    error.textContent = '';
+    const checked = cleanName(nameInput.value);
+    if (checked.error) {
+      error.textContent = checked.error;
+      nameInput.setAttribute('aria-invalid', 'true');
+      nameInput.focus();
+      return;
+    }
+    nameInput.removeAttribute('aria-invalid');
+    busy = true;
+    button.setAttribute('aria-disabled', 'true');
+    status.textContent = 'Sharing your score…';
+    const attempt = lastResult;
+    try {
+      const response = await shareScore({
+        name: checked.name,
+        presetId: config.presetId,
+        mode: config.mode,
+        compensatoryTime: config.compensatoryTime,
+        passageId: passage.id,
+        typed: attempt.typedText,
+        elapsedMs: result.elapsedMs,
+        byTimer,
+        keystrokes: attempt.keystrokes,
+      });
+      store.saveShareName(checked.name);
+      attempt.shared = response;
+      if (lastResult === attempt && currentView === 'results') renderShare()?.focus();
+    } catch (err) {
+      status.textContent = '';
+      error.textContent = err.message;
+      button.removeAttribute('aria-disabled');
+      busy = false;
+    }
+  });
+  body.replaceChildren(form);
+  return null;
+}
+
+/* ------------------------------------------------------------------ scoreboard view */
+
+const scoreDate = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function initScoresView() {
+  $('#scores-board').append(...BOARDS.map((id) => h('option', { value: id, text: boardName(id) })));
+  $('#scores-period').append(...Object.entries(PERIODS).map(([id, label]) => h('option', { value: id, text: label })));
+  $('#scores-board').addEventListener('change', () => renderScores());
+  $('#scores-period').addEventListener('change', () => renderScores());
+  $('#scores-rules').append(
+    ...[
+      'Exam simulation mode, on SSC CHSL English, SSC CHSL Hindi or SSC CGL DEST.',
+      'A built-in or online passage, not your own text.',
+      'Keep typing until the time is up, or reach the end of the passage.',
+      'Reach the target key depressions for the pattern.',
+      `Errors of ${BOARD_MAX_ERROR_PERCENT}% or less. Net speed already takes errors off, so accuracy counts.`,
+      `At least ${fmtSpoken(MIN_ELAPSED_MS / 1000)} of typing. Compensatory time is allowed.`,
+    ].map((t) => h('li', { text: t })),
+  );
+}
+
+let scoresRequest = 0;
+async function renderScores() {
+  const boardSelect = $('#scores-board');
+  if (scoresBoard) {
+    boardSelect.value = scoresBoard;
+    scoresBoard = null;
+  } else if (!boardSelect.dataset.chosen) {
+    // First visit: open the board for the pattern the candidate practises.
+    const preset = resolveConfig(setup).presetId;
+    if (BOARDS.includes(preset)) boardSelect.value = preset;
+  }
+  boardSelect.dataset.chosen = 'true';
+  const board = boardSelect.value;
+  const period = $('#scores-period').value;
+  const status = $('#scores-status');
+  const scroll = $('#scores-scroll');
+  const request = ++scoresRequest;
+  $('#scores-table-heading').textContent = `Top 10: ${boardName(board)}, ${PERIODS[period].toLowerCase()}`;
+  status.textContent = 'Loading the scoreboard…';
+  scroll.hidden = true;
+
+  let entries;
+  try {
+    ({ entries } = await fetchScoreboard(board, period));
+  } catch (err) {
+    if (request === scoresRequest) status.textContent = `The scoreboard could not be loaded. ${err.message}`;
+    return;
+  }
+  if (request !== scoresRequest) return;
+  if (!entries.length) {
+    status.textContent = period === 'week'
+      ? 'No scores in the last 7 days yet. Finish an Exam simulation and share your result to be the first.'
+      : 'No scores yet. Finish an Exam simulation and share your result to be the first.';
+    return;
+  }
+  const mine = cleanName(store.loadShareName()).key;
+  status.textContent = `${plural(entries.length, 'name')} on this scoreboard.`;
+  $('#scores-table').replaceChildren(
+    h('thead', {}, h('tr', {},
+      ...['Rank', 'Name', 'Net WPM', 'Errors', 'Key depressions', 'Date'].map((t, i) =>
+        h('th', { scope: 'col', class: i === 0 || (i >= 2 && i <= 4) ? 'num' : null, text: t })))),
+    h('tbody', {}, ...entries.map((e) => {
+      const you = Boolean(mine) && cleanName(e.name).key === mine;
+      return h('tr', { class: you ? 'is-you' : null },
+        h('td', { class: 'num', text: String(e.rank) }),
+        h('th', { scope: 'row' }, e.name, you ? h('span', { class: 'you-tag', text: ' (you)' }) : null),
+        h('td', { class: 'num', text: nf1.format(e.netWpm) }),
+        h('td', { class: 'num', text: `${nf1.format(e.errorPercent)}%` }),
+        h('td', { class: 'num', text: nf0.format(e.keyDepressions) }),
+        h('td', { text: scoreDate.format(new Date(e.date)) }),
+      );
+    })),
+  );
+  scroll.hidden = false;
 }
 
 function renderAnnotated(r, lang) {
@@ -1139,16 +1369,33 @@ function initResultsView() {
   $('#retry-btn').addEventListener('click', () => {
     if (lastResult) startTest(lastResult.config, lastResult.passage);
   });
-  $('#new-passage-btn').addEventListener('click', () => {
-    if (!lastResult) return;
+  let fetching = false;
+  $('#new-passage-btn').addEventListener('click', async () => {
+    if (!lastResult || fetching) return;
     const { config, passage } = lastResult;
-    const next = passage.id === 'own'
-      ? passage
-      : (() => {
-        const pool = passagesFor(config.lang).filter((p) => p.id !== passage.id);
-        return pool[Math.floor(Math.random() * pool.length)] ?? passage;
-      })();
-    startTest(config, next);
+    if (passage.id === 'own') {
+      startTest(config, passage);
+      return;
+    }
+    const btn = $('#new-passage-btn');
+    let next = null;
+    let notice = '';
+    if (isOnlinePassage(passage) || setup.passageId === 'online') {
+      fetching = true;
+      btn.setAttribute('aria-disabled', 'true');
+      try {
+        next = await takeOnlinePassage(config.lang, { avoid: passage.id });
+      } finally {
+        btn.removeAttribute('aria-disabled');
+        fetching = false;
+      }
+      if (!next) notice = OFFLINE_NOTICE;
+    }
+    if (!next) {
+      const pool = passagesFor(config.lang).filter((p) => p.id !== passage.id);
+      next = pool[Math.floor(Math.random() * pool.length)] ?? passage;
+    }
+    if (currentView === 'results') startTest(config, next, { notice });
   });
 }
 
@@ -1329,6 +1576,7 @@ const VIEW_TITLES = {
   test: 'Typing test',
   results: 'Your result',
   progress: 'Progress',
+  scores: 'Scoreboard',
   settings: 'Settings',
   guide: 'Guide',
 };
@@ -1364,6 +1612,7 @@ function show(requested) {
 
   if (name === 'results') renderResults();
   if (name === 'progress') renderProgress();
+  if (name === 'scores') renderScores();
   if (name === 'settings') syncSettingsForm();
 
   window.scrollTo(0, 0);
@@ -1470,6 +1719,7 @@ initSetupView();
 initTestView();
 initResultsView();
 initProgressView();
+initScoresView();
 syncSettingsForm = initSettingsView();
 document.addEventListener('click', onDocumentClick);
 window.addEventListener('hashchange', onHashChange);
