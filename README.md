@@ -80,8 +80,8 @@ The same server runs the API. Passages come from the real Wikipedia, and scores 
 
 The site runs as a Cloudflare Worker with static assets, configured in `wrangler.jsonc`. The files in `dist/` are served directly. Only `/api/*` runs the Worker script (`server/worker.js`), which uses a D1 database for the scoreboard. All of this fits the Workers Free plan. `wondrellabs.com` is on Cloudflare DNS, so the subdomain connects in one step.
 
-1. Create the database: in the Cloudflare dashboard, open **Storage & Databases → D1 SQL Database → Create**, name it `typeout`, and copy its **Database ID**.
-2. In `wrangler.jsonc`, paste the ID over `REPLACE_WITH_D1_DATABASE_ID`. Check that `name` matches the Worker's name in the dashboard; otherwise the deploy creates a second Worker. The ID is not a secret.
+1. Create the database (already done for the live site): in the Cloudflare dashboard, open **Storage & Databases → D1 SQL Database → Create**, name it `typeout`, and copy its **Database ID**.
+2. Put that ID in `database_id` in `wrangler.jsonc` (it holds the live database's ID now; change it only if you use a different database). Check that `name` matches the Worker's name in the dashboard; otherwise the deploy creates a second Worker. The ID is not a secret.
 3. Connect the repository: **Workers & Pages → Create → Import a repository**, choose `Glowing-Radiant/typeout`, and use these build settings (on an existing Worker they are under **Settings → Build**):
 
    | Setting | Value |

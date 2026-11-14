@@ -16,8 +16,8 @@
     {
       "binding": "DB",
       "database_name": "typeout",
-      // Paste the Database ID from Storage & Databases → D1 → typeout.
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+      // From Storage & Databases → D1 → typeout. Not a secret.
+      "database_id": "6544c1c9-0fbe-4a5b-8ce8-4773352731cb"
     }
   ],
   "observability": { "enabled": true }
