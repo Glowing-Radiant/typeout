@@ -5,6 +5,15 @@ import { findPreset, resolveConfig } from './presets.js';
 /** Exam patterns with a scoreboard, in display order. */
 export const BOARDS = ['chsl-en', 'chsl-hi', 'cgl-dest'];
 
+/**
+ * Each pattern has one scoreboard per mode. Practice highlights the passage and allows pausing, so
+ * its scores are kept apart from Exam simulation.
+ */
+export const MODES = { exam: 'Exam simulation', practice: 'Practice' };
+
+/** The key a score is stored under: the pattern for Exam simulation, pattern + "-practice" for Practice. */
+export const boardKey = (presetId, mode) => (mode === 'practice' ? `${presetId}-practice` : presetId);
+
 /** The most lenient official error limit (reserved categories), so no candidate is left out. */
 export const BOARD_MAX_ERROR_PERCENT = 10;
 
@@ -19,7 +28,7 @@ export const NAME_MAX = 24;
 
 export const PERIODS = { all: 'All time', week: 'Last 7 days' };
 
-export const boardName = (id) => findPreset(id).name;
+export const boardName = (id, mode = 'exam') => `${findPreset(id).name}${mode === 'practice' ? ' (Practice)' : ''}`;
 
 /** Time allowed for a scoreboard pattern, with or without compensatory time. */
 export function boardDuration(presetId, compensatoryTime) {
@@ -46,7 +55,7 @@ export function eligibility({ presetId, mode, passageId, passageLang, byTimer, c
   const no = (reason) => ({ ok: false, reason });
   if (!BOARDS.includes(presetId)) return no('Only SSC CHSL English, SSC CHSL Hindi and SSC CGL DEST attempts can be shared.');
   const preset = findPreset(presetId);
-  if (mode !== 'exam') return no('Only Exam simulation attempts can be shared, not Practice mode.');
+  if (!MODES[mode]) return no('Only Exam simulation and Practice attempts can be shared.');
   if (!passageId || passageId === 'own') return no('Attempts on your own passage cannot be shared, because the server cannot check them.');
   if (passageLang !== preset.lang) return no('The passage is not in the language of this exam pattern.');
   if (!result || result.typedWords === 0) return no('Nothing was typed.');

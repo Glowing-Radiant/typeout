@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chunkPassage, createDictator, screenReaderDuration, speakableText } from '../site/assets/js/dictation.js';
 import { tokenize } from '../site/assets/js/scoring.js';
+import { resolveConfig } from '../site/assets/js/presets.js';
 
 const parts = (words, chunks) => chunks.map((c) => words.slice(c.start, c.end).join(' '));
 
@@ -100,4 +101,29 @@ test('repeat before the dictation has started reads the first part once', (t) =>
   d.start();
   assert.deepEqual(heard, ['One two three.']);
   d.stop();
+});
+
+test('by default the next part waits until every word of the current part is typed', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const heard = [];
+  const d = createDictator({
+    words: WORDS, lang: 'en', options: { ...OPTIONS, lead: 0, idleAction: 'off', output: 'screenreader' },
+    announce: (s) => heard.push(s),
+  });
+  d.start();
+  t.mock.timers.tick(10000); // the first part has been read
+  d.progress(2); // "One two" typed, "three." still to go
+  t.mock.timers.tick(10000);
+  assert.deepEqual(heard, ['One two three.'], 'nothing new while the part is unfinished');
+  d.progress(3); // "three." finished
+  assert.deepEqual(heard, ['One two three.', 'Four five six.']);
+  d.stop();
+});
+
+test('the early-reading option is off unless chosen, and then reads ahead by the chosen words', () => {
+  const base = { presetId: 'chsl-en', dictation: 'voice', dictationLead: 3 };
+  assert.equal(resolveConfig(base).dictation.lead, 0);
+  assert.equal(resolveConfig(base).dictation.early, false);
+  assert.equal(resolveConfig({ ...base, dictationEarly: true }).dictation.lead, 3);
+  assert.equal(resolveConfig({ ...base, dictationEarly: true, dictationLead: 0 }).dictation.lead, 2, 'early needs at least one word');
 });

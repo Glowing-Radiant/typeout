@@ -65,7 +65,8 @@ test('eligibility follows the scoreboard rules', () => {
   const typed = words.slice(0, 400).join(' ');
   const result = evaluate({ passage: builtIn.text, typed, elapsedMs: 600000, endedByTimer: true });
   assert.equal(eligibility({ ...base, result }).ok, true);
-  assert.equal(eligibility({ ...base, mode: 'practice', result }).ok, false);
+  assert.equal(eligibility({ ...base, mode: 'practice', result }).ok, true, 'Practice has its own scoreboard');
+  assert.equal(eligibility({ ...base, mode: 'turbo', result }).ok, false);
   assert.equal(eligibility({ ...base, presetId: 'quick', result }).ok, false);
   assert.equal(eligibility({ ...base, passageId: 'own', result }).ok, false);
   assert.equal(eligibility({ ...base, passageLang: 'hi', result }).ok, false);
@@ -153,7 +154,7 @@ test('attempts that break the rules are refused with a reason', { skip }, async 
     [{ presetId: 'quick' }, 400, /no scoreboard/],
     [{ passageId: 'own' }, 400, /cannot be checked/],
     [{ passageId: 'wiki-en-1-2' }, 400, /cannot be checked/],
-    [{ mode: 'practice' }, 422, /Exam simulation/],
+    [{ mode: 'turbo' }, 422, /Exam simulation and Practice/],
     [{ typed: words.slice(0, 50).join(' ') }, 422, /time runs out/],
     [{ elapsedMs: 30000 }, 422, /shorter than a minute|too high/],
     [{ elapsedMs: 300000, byTimer: true }, 400, /does not match/],
@@ -223,4 +224,22 @@ test('the Worker sends /api/* to the API and everything else to static assets', 
   assert.equal((await worker.fetch(new Request('http://x/api/scores', { method: 'DELETE' }), env)).status, 404);
   assert.equal(await (await worker.fetch(new Request('http://x/index.html'), env)).text(), 'asset');
   assert.deepEqual(served, ['/index.html']);
+});
+
+test('Practice and Exam simulation scores go on separate scoreboards', { skip }, async () => {
+  const env = await freshEnv();
+  assert.equal((await post(env, attempt({ name: 'Asha' }))).status, 201);
+  const practice = await post(env, attempt({ name: 'Ravi', mode: 'practice' }), '198.51.100.2');
+  assert.equal(practice.status, 201);
+  const shared = await practice.json();
+  assert.equal(shared.boardName, 'SSC CHSL – English (Practice)');
+  assert.equal(shared.position, 1, 'ranked among Practice scores only');
+
+  const exam = await (await get(env, 'board=chsl-en&mode=exam')).json();
+  const practiceBoard = await (await get(env, 'board=chsl-en&mode=practice')).json();
+  const defaultBoard = await (await get(env, 'board=chsl-en')).json();
+  assert.deepEqual(exam.entries.map((e) => e.name), ['Asha']);
+  assert.deepEqual(practiceBoard.entries.map((e) => e.name), ['Ravi']);
+  assert.deepEqual(defaultBoard.entries.map((e) => e.name), ['Asha'], 'no mode means Exam simulation');
+  assert.equal((await get(env, 'board=chsl-en&mode=turbo')).status, 400);
 });

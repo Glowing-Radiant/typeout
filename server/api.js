@@ -1,15 +1,16 @@
 // Type Out API, run by the Cloudflare Worker in server/worker.js with a D1 database bound as DB.
 //
 //   GET  /api/passage?lang=en|hi          a new passage from Wikipedia (stored, so scores on it can be checked)
-//   GET  /api/scores?board=…&period=…     top 10 for a scoreboard
+//   GET  /api/scores?board=…&mode=…&period=…  top 10 for a scoreboard (mode: exam or practice)
 //   POST /api/scores                      share an attempt; the server marks it again before saving it
 //
 // Scores are never taken from the browser: it sends the typed text, and the server re-marks it with the
 // same scoring engine the page uses and applies the scoreboard rules (site/assets/js/leaderboard.js).
 import { evaluate } from '../site/assets/js/scoring.js';
 import { findPassage } from '../site/assets/js/passages.js';
-import { findPreset } from '../site/assets/js/presets.js';
-import { BOARDS, PERIODS, boardDuration, cleanName, eligibility } from '../site/assets/js/leaderboard.js';
+import {
+  BOARDS, MODES, PERIODS, boardDuration, boardKey, boardName, cleanName, eligibility,
+} from '../site/assets/js/leaderboard.js';
 import { fetchWikipediaPassage } from './wikipedia.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -163,6 +164,7 @@ async function lookupPassage(db, id) {
 
 /* ------------------------------------------------------------------ scores */
 
+/** @param {string} board a key from boardKey() */
 async function topScores(db, board, period) {
   const since = period === 'week' ? Date.now() - 7 * DAY_MS : 0;
   // Each name appears once, with its best score; an earlier score wins a tie.
@@ -187,13 +189,15 @@ async function topScores(db, board, period) {
 export async function handleScoresGet(request, env) {
   const params = new URL(request.url).searchParams;
   const board = params.get('board') ?? BOARDS[0];
+  const mode = params.get('mode') ?? 'exam';
   const period = params.get('period') ?? 'all';
   if (!BOARDS.includes(board)) return fail(400, 'Unknown scoreboard.');
+  if (!MODES[mode]) return fail(400, 'mode must be exam or practice.');
   if (!PERIODS[period]) return fail(400, 'period must be all or week.');
   const db = await database(env).catch(() => null);
   if (!db) return fail(503, 'The scoreboard is not set up yet.');
-  const entries = await topScores(db, board, period);
-  return json({ board, period, entries }, 200, { 'Cache-Control': 'public, max-age=30' });
+  const entries = await topScores(db, boardKey(board, mode), period);
+  return json({ board, mode, period, entries }, 200, { 'Cache-Control': 'public, max-age=30' });
 }
 
 export async function handleScoresPost(request, env) {
@@ -247,11 +251,12 @@ export async function handleScoresPost(request, env) {
 
   const now = Date.now();
   const netWpm = round1(result.netWpm);
+  const key = boardKey(presetId, mode);
   await db.prepare(
     `INSERT INTO scores (board, name, name_key, net_wpm, gross_wpm, error_percent, key_depressions, elapsed_ms,
        passage_id, passage_title, client, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
-    presetId, checkedName.name, checkedName.key, netWpm, round1(result.grossWpm), round1(result.errorPercent),
+    key, checkedName.name, checkedName.key, netWpm, round1(result.grossWpm), round1(result.errorPercent),
     result.keyDepressions, Math.round(elapsedMs), passage.id, passage.title, client, now,
   ).run();
 
@@ -259,16 +264,17 @@ export async function handleScoresPost(request, env) {
   const ahead = await db.prepare(
     `SELECT COUNT(*) AS n FROM (SELECT name_key, MAX(net_wpm) AS best FROM scores WHERE board = ? GROUP BY name_key)
      WHERE best > ? AND name_key != ?`,
-  ).bind(presetId, netWpm, checkedName.key).first('n');
+  ).bind(key, netWpm, checkedName.key).first('n');
   const personalBest = await db.prepare('SELECT MAX(net_wpm) AS best FROM scores WHERE board = ? AND name_key = ?')
-    .bind(presetId, checkedName.key).first('best');
+    .bind(key, checkedName.key).first('best');
 
   return json({
     board: presetId,
-    boardName: findPreset(presetId).name,
+    mode,
+    boardName: boardName(presetId, mode),
     netWpm,
     personalBest,
     position: ahead + 1,
-    entries: await topScores(db, presetId, 'all'),
+    entries: await topScores(db, key, 'all'),
   }, 201);
 }

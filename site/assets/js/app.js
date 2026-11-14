@@ -4,7 +4,7 @@ import { PRESETS, ERROR_LIMITS, LANG_LABEL, findPreset, resolveConfig } from './
 import * as store from './storage.js';
 import { fetchScoreboard, isOnlinePassage, prefetchPassages, shareScore, takeOnlinePassage } from './online.js';
 import {
-  BOARDS, BOARD_MAX_ERROR_PERCENT, MIN_ELAPSED_MS, NAME_MAX, PERIODS, boardName, cleanName, eligibility,
+  BOARDS, BOARD_MAX_ERROR_PERCENT, MIN_ELAPSED_MS, MODES, NAME_MAX, PERIODS, boardName, cleanName, eligibility,
 } from './leaderboard.js';
 import {
   createDictator, onVoicesChanged, previewVoice, screenReaderDuration, speechSupported, voicesFor, voicesLoaded,
@@ -256,6 +256,7 @@ function initSetupView() {
     form.elements.dictationPunctuation.checked = setup.dictationPunctuation;
     form.elements.dictationUnit.value = setup.dictationUnit;
     form.elements.dictationSize.value = setup.dictationSize;
+    form.elements.dictationEarly.checked = setup.dictationEarly;
     form.elements.dictationLead.value = setup.dictationLead;
     form.elements.idleAction.value = setup.idleAction;
     form.elements.idleSeconds.value = setup.idleSeconds;
@@ -283,6 +284,7 @@ function initSetupView() {
       dictationPunctuation: form.elements.dictationPunctuation.checked,
       dictationUnit: form.elements.dictationUnit.value,
       dictationSize: form.elements.dictationSize.value,
+      dictationEarly: form.elements.dictationEarly.checked,
       dictationLead: form.elements.dictationLead.value,
       idleAction: form.elements.idleAction.value,
       idleSeconds: form.elements.idleSeconds.value,
@@ -353,6 +355,7 @@ function initSetupView() {
     $('#dictation-options').hidden = output === 'off' || (output === 'voice' && !canSpeak);
     $('#voice-fields').hidden = output !== 'voice';
     $('#dictation-size-field').hidden = setup.dictationUnit !== 'words';
+    $('#dictation-lead-field').hidden = !setup.dictationEarly;
     $('#idle-seconds-field').hidden = setup.idleAction === 'off';
     const rate = nf1.format(Number(setup.speechRate) || 1);
     $('#speech-rate-out').textContent = `${rate}×`;
@@ -450,6 +453,7 @@ function validateSetup() {
 function dictationSummary(d) {
   if (!d) return 'Off';
   const parts = [DICTATION_LABEL[d.output], d.unit === 'words' ? `${d.size} words at a time` : 'sentence by sentence'];
+  parts.push(d.early ? `next part ${plural(d.lead, 'word')} before the end` : 'next part once each is typed');
   if (d.hide) parts.push('passage hidden');
   return parts.join(', ');
 }
@@ -1159,7 +1163,7 @@ function renderResults() {
 
 /* ------------------------------------------------------------------ sharing a score */
 
-let scoresBoard = null; // scoreboard to open next, set when coming from a result
+let scoresBoard = null; // scoreboard to open next ({board, mode}), set when coming from a result
 
 /** Fill the scoreboard card on the results view. Returns an element to focus, if any. */
 function renderShare() {
@@ -1167,8 +1171,12 @@ function renderShare() {
   const { config, passage, result, byTimer } = lastResult;
   const seeBoard = () => h('a', {
     href: '#/scores',
-    text: BOARDS.includes(config.presetId) ? `See the ${config.presetShort} scoreboard` : 'See the scoreboard',
-    onclick: () => { scoresBoard = BOARDS.includes(config.presetId) ? config.presetId : null; },
+    text: BOARDS.includes(config.presetId)
+      ? `See the ${config.presetShort}${config.mode === 'practice' ? ' Practice' : ''} scoreboard`
+      : 'See the scoreboard',
+    onclick: () => {
+      scoresBoard = BOARDS.includes(config.presetId) ? { board: config.presetId, mode: config.mode } : null;
+    },
   });
 
   if (lastResult.shared) {
@@ -1203,7 +1211,7 @@ function renderShare() {
   const error = h('p', { class: 'error-text', id: 'share-error', role: 'alert' });
   const status = h('p', { class: 'hint', role: 'status' });
   const form = h('form', { class: 'share-form', novalidate: true },
-    h('p', { text: `This attempt can go on the ${config.presetName} scoreboard. Sharing is up to you.` }),
+    h('p', { text: `This attempt can go on the ${boardName(config.presetId, config.mode)} scoreboard. Sharing is up to you.` }),
     h('div', { class: 'field' }, h('label', { for: 'share-name', text: 'Name to show' }), nameInput),
     h('p', {
       class: 'hint',
@@ -1261,12 +1269,14 @@ const scoreDate = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'sho
 
 function initScoresView() {
   $('#scores-board').append(...BOARDS.map((id) => h('option', { value: id, text: boardName(id) })));
+  $('#scores-mode').append(...Object.entries(MODES).map(([id, label]) => h('option', { value: id, text: label })));
   $('#scores-period').append(...Object.entries(PERIODS).map(([id, label]) => h('option', { value: id, text: label })));
   $('#scores-board').addEventListener('change', () => renderScores());
+  $('#scores-mode').addEventListener('change', () => renderScores());
   $('#scores-period').addEventListener('change', () => renderScores());
   $('#scores-rules').append(
     ...[
-      'Exam simulation mode, on SSC CHSL English, SSC CHSL Hindi or SSC CGL DEST.',
+      'SSC CHSL English, SSC CHSL Hindi or SSC CGL DEST. Exam simulation and Practice each have their own scoreboard.',
       'A built-in or online passage, not your own text.',
       'Keep typing until the time is up, or reach the end of the passage.',
       'Reach the target key depressions for the pattern.',
@@ -1279,27 +1289,31 @@ function initScoresView() {
 let scoresRequest = 0;
 async function renderScores() {
   const boardSelect = $('#scores-board');
+  const modeSelect = $('#scores-mode');
   if (scoresBoard) {
-    boardSelect.value = scoresBoard;
+    boardSelect.value = scoresBoard.board;
+    modeSelect.value = scoresBoard.mode;
     scoresBoard = null;
   } else if (!boardSelect.dataset.chosen) {
-    // First visit: open the board for the pattern the candidate practises.
-    const preset = resolveConfig(setup).presetId;
-    if (BOARDS.includes(preset)) boardSelect.value = preset;
+    // First visit: open the board for the pattern and mode the candidate practises.
+    const { presetId, mode } = resolveConfig(setup);
+    if (BOARDS.includes(presetId)) boardSelect.value = presetId;
+    modeSelect.value = mode;
   }
   boardSelect.dataset.chosen = 'true';
   const board = boardSelect.value;
+  const mode = modeSelect.value;
   const period = $('#scores-period').value;
   const status = $('#scores-status');
   const scroll = $('#scores-scroll');
   const request = ++scoresRequest;
-  $('#scores-table-heading').textContent = `Top 10: ${boardName(board)}, ${PERIODS[period].toLowerCase()}`;
+  $('#scores-table-heading').textContent = `Top 10: ${boardName(board, mode)}, ${PERIODS[period].toLowerCase()}`;
   status.textContent = 'Loading the scoreboard…';
   scroll.hidden = true;
 
   let entries;
   try {
-    ({ entries } = await fetchScoreboard(board, period));
+    ({ entries } = await fetchScoreboard(board, mode, period));
   } catch (err) {
     if (request === scoresRequest) status.textContent = `The scoreboard could not be loaded. ${err.message}`;
     return;
@@ -1307,8 +1321,8 @@ async function renderScores() {
   if (request !== scoresRequest) return;
   if (!entries.length) {
     status.textContent = period === 'week'
-      ? 'No scores in the last 7 days yet. Finish an Exam simulation and share your result to be the first.'
-      : 'No scores yet. Finish an Exam simulation and share your result to be the first.';
+      ? `No scores in the last 7 days yet. Finish ${mode === 'exam' ? 'an Exam simulation' : 'a Practice'} test and share your result to be the first.`
+      : `No scores yet. Finish ${mode === 'exam' ? 'an Exam simulation' : 'a Practice'} test and share your result to be the first.`;
     return;
   }
   const mine = cleanName(store.loadShareName()).key;

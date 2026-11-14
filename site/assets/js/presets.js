@@ -98,7 +98,9 @@ export function resolveConfig(s) {
         punctuation: Boolean(s.dictationPunctuation),
         unit: s.dictationUnit === 'words' ? 'words' : 'sentence',
         size: Math.round(clamp(Number(s.dictationSize) || 8, 3, 30)),
-        lead: Math.round(clamp(Number(s.dictationLead) || 0, 0, 10)),
+        // By default the next part waits until every word of the current one is typed (lead 0).
+        early: Boolean(s.dictationEarly),
+        lead: s.dictationEarly ? Math.round(clamp(Number(s.dictationLead) || 2, 1, 10)) : 0,
         idleAction: ['repeat', 'next', 'off'].includes(s.idleAction) ? s.idleAction : 'repeat',
         idleSeconds: clamp(Number(s.idleSeconds) || 6, 2, 60),
         voiceURI: s.voiceURI || '',

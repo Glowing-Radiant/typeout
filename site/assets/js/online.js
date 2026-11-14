@@ -104,8 +104,9 @@ export async function takeOnlinePassage(lang, { avoid } = {}) {
 export const isOnlinePassage = (p) => Boolean(p?.source) && String(p.id).startsWith('wiki-');
 
 /** @returns {Promise<{entries: object[]}>} */
-export function fetchScoreboard(board, period) {
-  return request(`api/scores?board=${encodeURIComponent(board)}&period=${encodeURIComponent(period)}`);
+export function fetchScoreboard(board, mode, period) {
+  const q = new URLSearchParams({ board, mode, period });
+  return request(`api/scores?${q}`);
 }
 
 /** Share an attempt. Rejects with an Error whose message can be shown as it is. */

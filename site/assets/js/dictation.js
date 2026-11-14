@@ -1,5 +1,6 @@
-// Dictation: reads the passage aloud in parts, staying a few words ahead of the typist, either with the
-// device's speech voice or through the candidate's screen reader (never both). An idle timer repeats
+// Dictation: reads the passage aloud in parts, either with the device's speech voice or through the
+// candidate's screen reader (never both). Each part is read once the part before it is fully typed
+// (lead 0), or, if the candidate prefers, a few words before the end (lead > 0). An idle timer repeats
 // the current part, or moves on, when typing stops.
 // The pure helpers (chunkPassage, speakableText) have no DOM access so the Node tests can use them.
 

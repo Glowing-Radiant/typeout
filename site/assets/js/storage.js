@@ -37,7 +37,8 @@ export const DEFAULT_SETUP = {
   dictationPunctuation: false,
   dictationUnit: 'sentence', // sentence | words
   dictationSize: 8, // words per part when dictationUnit is 'words'
-  dictationLead: 2, // read the next part when this many words of the last part are left
+  dictationEarly: false, // read the next part before the current one is fully typed
+  dictationLead: 2, // with dictationEarly: read the next part when this many words of the last part are left
   idleAction: 'repeat', // repeat | next | off
   idleSeconds: 6,
   voiceURI: '',

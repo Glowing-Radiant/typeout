@@ -11,11 +11,11 @@ Live at **https://typeout.wondrellabs.com** once deployed.
 - **Exam patterns**: SSC CHSL English (10 min, 35 WPM), SSC CHSL Hindi (10 min, 30 WPM), SSC CGL DEST (15 min, 2,000 key depressions), a 2-minute quick drill, and a custom pattern.
 - **Two modes**: *Exam simulation* has no highlighting and no pause, like the SSC software. *Practice* highlights the current word, marks wrong words as you type and lets you pause.
 - **SSC-style marking**: your text is lined up with the passage word by word. Missed, extra and wrong words are full mistakes. Spacing, capital letters, punctuation and word order are half mistakes. You get gross and net WPM, KDPH, error percentage and a pass or fail against your target and error limit.
-- **Dictation**: the passage is read aloud in parts (a sentence or a set number of words), a few words ahead of you. Choose **Device voice** (speech synthesis only, nothing sent to screen readers), **My screen reader** (parts go to the screen reader through a live region, device voice silent) or **Off**. An idle timer either repeats the part, reads the next part anyway, or waits. You can hide the passage to type only from what you hear, have punctuation spoken, and pick the device voice and speed.
+- **Dictation**: the passage is read aloud in parts (a sentence or a set number of words). Each part is read once you have typed every word of the one before it; an option reads it a chosen number of words early instead, so there is no gap. Choose **Device voice** (speech synthesis only, nothing sent to screen readers), **My screen reader** (parts go to the screen reader through a live region, device voice silent) or **Off**. An idle timer either repeats the part, reads the next part anyway, or waits. You can hide the passage to type only from what you hear, have punctuation spoken, and pick the device voice and speed.
 - **Mistake review**: a table of every mistake, plus the passage with your mistakes marked inline (shown with symbols and text, not colour alone).
 - **Rules you can set**: backspace on or off, timer starting on the first key press, compensatory time for PwBD candidates (20 min per hour), and the error limit (UR 7%, reserved categories 10%, or a custom value).
 - **Passages that never run out**: *New passage each time* (the default) takes a fresh passage from English or Hindi Wikipedia for every test, on exam-style subjects (economy, environment, science, governance, history and so on). It is cleaned for typing and credited under CC BY-SA 4.0. There are also 8 English and 4 Hindi passages written for this app, which are used offline, or you can paste your own.
-- **Scoreboard**: after an Exam simulation on CHSL English, CHSL Hindi or CGL DEST, you can choose to share your score under a display name. The page shows the top 10 names for each pattern, all time or for the last 7 days. The server marks the typed text again, so the numbers can't simply be made up.
+- **Scoreboard**: after a test on CHSL English, CHSL Hindi or CGL DEST, you can choose to share your score under a display name. Exam simulation and Practice have separate scoreboards. The page shows the top 10 names for each pattern and mode, all time or for the last 7 days. The server marks the typed text again, so the numbers can't simply be made up.
 - **Progress**: history, averages, a chart of net speed and CSV export, stored in the browser's `localStorage`. Nothing leaves the browser unless you share a score.
 - **Accessibility**: the target is WCAG 2.2 AA. It has semantic landmarks, a skip link, focus management between views, a labelled timer, screen-reader announcements (time left, results, optional mistake alerts) and reading aids (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>/<kbd>W</kbd>/<kbd>S</kbd>/<kbd>T</kbd>/<kbd>P</kbd>) that read the passage aloud while you type. Light, dark and high-contrast themes are included, along with adjustable text size, spacing and typeface, reduced motion, and support for forced colours.
 - **Offline**: a service worker caches the app after the first visit, and it can be installed as a PWA.
@@ -117,13 +117,13 @@ Wikipedia isn't written in SSC style, so expect more names and technical terms t
 
 **Scores.** `POST /api/scores` receives the name, pattern, passage id, typed text, time taken and key-press count. It doesn't take a score from the browser. The server re-marks the text with `site/assets/js/scoring.js` and applies the rules in `site/assets/js/leaderboard.js`:
 
-- Exam simulation only, on a built-in or stored online passage in the pattern's language.
+- Exam simulation or Practice, on a built-in or stored online passage in the pattern's language. Each mode has its own scoreboard: scores are stored under the pattern id (`chsl-en`) for Exam simulation and `chsl-en-practice` for Practice.
 - The test ran until time was up or reached the end of the passage, and lasted at least a minute.
 - The attempt met the target key depressions with at most 10% errors.
 - Gross speed is 200 WPM or less.
 - There are at most 6 shares per visitor per hour. Visitors are identified by a daily-changing hash of their IP address. The address itself isn't stored.
 
-`GET /api/scores?board=chsl-en|chsl-hi|cgl-dest&period=all|week` returns the top 10 names, each with its best score.
+`GET /api/scores?board=chsl-en|chsl-hi|cgl-dest&mode=exam|practice&period=all|week` returns the top 10 names, each with its best score.
 
 **Limits.** Without accounts, a determined person could still send typed text and a time they made up. Re-marking, the speed cap, the key-press check and the rate limit make that hard, not impossible. To remove a score, run SQL in the D1 console, for example `DELETE FROM scores WHERE name = 'Some name';`.
 
