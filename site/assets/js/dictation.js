@@ -74,12 +74,19 @@ export function onVoicesChanged(callback) {
   if (speechSupported()) speechSynthesis.addEventListener('voiceschanged', callback);
 }
 
-function utterance(text, { lang, voiceURI, rate }) {
+export function utterance(text, { lang, voiceURI, rate }) {
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = lang === 'hi' ? 'hi-IN' : 'en-IN';
   const voices = voicesFor(lang);
   const voice = voices.find((v) => v.voiceURI === voiceURI) ?? voices[0];
-  if (voice) u.voice = voice;
+  // The utterance's language must be the voice's own. With a different one (say en-IN for a UK
+  // voice), Chrome, Edge and Safari ignore the chosen voice and speak with one that matches the
+  // language instead, so the voice in the list and the voice you hear would differ.
+  if (voice) {
+    u.voice = voice;
+    u.lang = voice.lang;
+  } else {
+    u.lang = lang === 'hi' ? 'hi-IN' : 'en-IN';
+  }
   u.rate = rate;
   return u;
 }

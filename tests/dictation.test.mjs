@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chunkPassage, createDictator, screenReaderDuration, speakableText } from '../site/assets/js/dictation.js';
+import { chunkPassage, createDictator, screenReaderDuration, speakableText, utterance } from '../site/assets/js/dictation.js';
 import { tokenize } from '../site/assets/js/scoring.js';
 import { resolveConfig } from '../site/assets/js/presets.js';
 
@@ -126,4 +126,25 @@ test('the early-reading option is off unless chosen, and then reads ahead by the
   assert.equal(resolveConfig(base).dictation.early, false);
   assert.equal(resolveConfig({ ...base, dictationEarly: true }).dictation.lead, 3);
   assert.equal(resolveConfig({ ...base, dictationEarly: true, dictationLead: 0 }).dictation.lead, 2, 'early needs at least one word');
+});
+
+test('the chosen voice is used with its own language, so browsers do not swap it for another', (t) => {
+  const voices = [
+    { name: 'Heera', lang: 'en-IN', voiceURI: 'heera' },
+    { name: 'George', lang: 'en-GB', voiceURI: 'george' },
+    { name: 'Kalpana', lang: 'hi-IN', voiceURI: 'kalpana' },
+  ];
+  globalThis.window = globalThis;
+  globalThis.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+  globalThis.speechSynthesis = { getVoices: () => voices, speak() {}, cancel() {} };
+  t.after(() => { delete globalThis.window; delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance; });
+
+  const uk = utterance('Hello', { lang: 'en', voiceURI: 'george', rate: 1 });
+  assert.equal(uk.voice.name, 'George');
+  assert.equal(uk.lang, 'en-GB', 'not en-IN, which would make the browser pick an Indian voice instead');
+  const fallback = utterance('Hello', { lang: 'en', voiceURI: 'gone', rate: 1 });
+  assert.equal(fallback.voice.name, 'Heera', 'a voice that no longer exists falls back to the first English one');
+  assert.equal(fallback.lang, 'en-IN');
+  globalThis.speechSynthesis.getVoices = () => [];
+  assert.equal(utterance('नमस्ते', { lang: 'hi', voiceURI: '', rate: 1 }).lang, 'hi-IN', 'no voices: language only');
 });
